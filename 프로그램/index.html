@@ -66,7 +66,7 @@
   <div class="toolbar-group"><h1>인과 편집기</h1><button id="btnHelp">도움말</button></div>
   <div class="toolbar-group"><button id="btnAdd">노드 추가</button>
     <select id="layoutMode" title="정렬 방식을 선택하면 바로 적용됩니다">
-      <option value="layered">계층 · 좌→우</option><option value="pyramid" title="인과 단계별 위에서 아래로">피라미드</option><option value="diamond" title="뿌리는 위, 잎은 아래에 두고 가운데를 넓힘">다이아몬드</option><option value="circle">원형</option><option value="grid">격자</option>
+      <option value="layered">계층 · 좌→우</option><option value="pyramid" title="인과 단계별 위에서 아래로">피라미드</option><option value="diamond" title="시작은 위, 목표는 아래에 두고 가운데를 넓힘">다이아몬드</option><option value="circle">원형</option><option value="grid">격자</option>
     </select></div>
   <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드와 바로 연결된 노드만 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
   <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReset">초기화</button></div>
@@ -86,7 +86,10 @@
           <option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option>
         </select>
       </label>
-<label>제목<input id="f_title"></label>
+      <label>역할
+        <select id="f_kind"><option value="start">시작</option><option value="normal">일반</option><option value="goal">목표</option></select>
+      </label>
+      <label>제목<input id="f_title"></label>
       <label>메모<textarea id="f_memo"></textarea></label>
       <button id="btnOpenMd">노드 md 파일 열기</button>
       <button id="btnDelNode">이 노드 삭제</button>
@@ -111,16 +114,16 @@
     <li>노드 선택 후 Shift+클릭 다른 노드: 화살표 연결 (원인 → 결과)</li>
     <li>화살표를 클릭하면 메모를 적을 수 있습니다</li>
     <li>노드·화살표 선택 후 Delete: 삭제</li>
-    <li>노드를 선택해 진행 상태(미착수·진행 중·완료·중단·실패)와 메모를 편집합니다. 상태마다 노드 색이 다릅니다</li>
+    <li>노드를 선택해 진행 상태(미착수·진행 중·완료·중단·실패), 역할(시작·일반·목표), 메모를 편집합니다. 상태와 역할에 따라 표시가 달라집니다</li>
     <li>포커스 모드: 선택 노드와 바로 연결된 노드만 표시합니다. 진행 상태와 색은 바뀌지 않으며, 포커스 종료를 누르면 전체 그래프가 다시 보입니다</li>
-    <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양과 색, 선택 강조 색을 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
+    <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양, 선택 강조 색을 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
   </ul>
   <button id="btnHelpClose">닫기</button>
 </dialog>
 
 <dialog id="versionDlg">
   <h2 style="margin-top:0;font-size:17px">그래프 버전 기록</h2>
-  <p class="hint">버전 기록은 현재 상태 저장을 눌렀을 때만 남습니다. 초기화·JSON 불러오기·버전 복원 전후에는 자동으로 기록하지 않습니다.</p>
+  <p class="hint">버전 기록은 현재 상태 저장을 눌렀을 때만 남습니다.</p>
   <label>수동 버전 요약 (비워 두면 자동으로 적힙니다)<input id="versionSummary" maxlength="160" placeholder="예: 실행 결과를 반영해 다음 단계를 수정"></label>
   <button id="btnCreateVersion">현재 상태 저장</button>
   <div id="versionList" class="hint" style="margin-top:16px;max-height:45vh;overflow:auto"></div>
@@ -337,15 +340,15 @@ function normalizeNodeStatuses() {
     if (!NODE_STATUSES[n.status]) n.status = 'not_started';
     delete n.checked;
     delete n.now;
-    delete n.kind;
+    if (!['normal', 'start', 'goal'].includes(n.kind)) n.kind = 'normal';
   }
   for (const e of S.edges || []) {
     if (e.label) e.memo = [e.memo, e.label].filter(Boolean).join(' / ');
     delete e.label;
   }
 }
-const startNodes = () => { const targets = new Set(S.edges.map(e => e.to)), sources = new Set(S.edges.map(e => e.from)); return S.nodes.filter(n => !targets.has(n.id) && sources.has(n.id)); };
-const goalNodes = () => { const sources = new Set(S.edges.map(e => e.from)), targets = new Set(S.edges.map(e => e.to)); return S.nodes.filter(n => !sources.has(n.id) && targets.has(n.id)); };
+const startNodes = () => S.nodes.filter(n => n.kind === 'start');
+const goalNodes = () => S.nodes.filter(n => n.kind === 'goal');
 const dims = () => S.settings.shape === 'circle' ? CIRCLE : RECT;
 const pushTo = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
 
@@ -414,7 +417,7 @@ function render() {
   for (const n of S.nodes) {
     if (!visibleNodeIds.has(n.id)) continue;
     const isSel = sel.type === 'node' && sel.id === n.id;
-    const fill = st.nodeColor;
+    const fill = n.kind === 'start' ? '#ecfdf5' : n.kind === 'goal' ? '#fef2f2' : st.nodeColor;
     const status = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
     const stroke = isSel ? selectionColor : status.color;
     const sw = isSel ? 4 : 3;
@@ -461,6 +464,7 @@ function renderPanel() {
   $('#nodeForm').hidden = !n;
   $('#edgeBox').hidden = !e;
   if (n) {
+    $('#f_kind').value = n.kind || 'normal';
     for (const [id, key] of NODE_FIELDS) $('#' + id).value = n[key] ?? '';
     $('#f_status').value = n.status || 'not_started';
   }
@@ -512,7 +516,7 @@ function freeNodeId() {
 
 function addNode(x, y) {
   const id = freeNodeId();
-  S.nodes.push({id, status:'not_started', title:'새 노드', x: Math.max(0, x), y: Math.max(0, y), memo:''});
+  S.nodes.push({id, kind:'normal', status:'not_started', title:'새 노드', x: Math.max(0, x), y: Math.max(0, y), memo:''});
   save(); select('node', id);
 }
 
@@ -563,8 +567,9 @@ const fileName = n => `n${n.id.slice(1).padStart(4, '0')}_${(n.title || '노드'
 const linkTo = n => `[${n.title}](${encodeURI(fileName(n))})`;
 
 function nodeMd(n) {
+  const kind = n.kind === 'start' ? ' (시작)' : n.kind === 'goal' ? ' (목표)' : '';
   const status = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
-  const L = [`# ${n.title}`, '', `## 진행 상태`, '', status.label, ''];
+  const L = [`# ${n.title}${kind}`, '', `## 진행 상태`, '', status.label, ''];
   if (n.memo) L.push('## 메모', '', n.memo, '');
 
   const incoming = S.edges.filter(e => e.to === n.id);
@@ -585,9 +590,9 @@ function nodeMd(n) {
 }
 
 function pathsMd() {
-  const L = ['# 뿌리에서 잎까지의 경로', '', `- 내보낸 날짜: ${today()}`, ''];
+  const L = ['# 시작에서 목표까지의 경로', '', `- 내보낸 날짜: ${today()}`, ''];
   const paths = enumeratePaths(20);
-  if (!paths.length) L.push('_뿌리 노드에서 잎 노드까지 이어지는 화살표 경로가 없습니다._');
+  if (!paths.length) L.push('_시작 노드와 목표 노드를 지정하고 그 사이를 화살표로 연결하면 경로가 표시됩니다._');
   else paths.forEach((p, i) => {
     const parts = [linkTo(node(edge(p[0]).from))];
     for (const eid of p) { const e = edge(eid); parts.push(linkTo(node(e.to))); }
@@ -824,6 +829,11 @@ NODE_FIELDS.forEach(([id, key]) => $('#' + id).addEventListener('input', e => {
   const n = node(sel.id); if (!n) return;
   n[key] = e.target.value; save(); render();
 }));
+$('#f_kind').addEventListener('change', e => {
+  const n = node(sel.id); if (!n) return;
+  n.kind = ['normal', 'start', 'goal'].includes(e.target.value) ? e.target.value : 'normal';
+  save(); render(); renderPanel();
+});
 EDGE_FIELDS.forEach(([id, key]) => $('#' + id).addEventListener('input', e => {
   const x = edge(sel.id); if (!x) return;
   x[key] = e.target.value; save(); render();
@@ -896,7 +906,7 @@ $('#versionList').addEventListener('click', async e => {
   }
   if (restore) {
     const v = versions().find(x => x.id === restore.dataset.versionRestore);
-    if (!v || !confirm(`“${v.summary}” 버전으로 그래프 전체를 복원할까요? 현재 그래프는 버전 기록에 자동 저장되지 않습니다.`)) return;
+    if (!v || !confirm(`“${v.summary}” 버전으로 그래프 전체를 복원할까요?`)) return;
     await applyGraph(v.data); renderVersions();
   }
   if (remove) {
