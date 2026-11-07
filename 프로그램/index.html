@@ -66,7 +66,7 @@
   <div class="toolbar-group"><h1>인과 편집기</h1><button id="btnHelp">도움말</button></div>
   <div class="toolbar-group"><button id="btnAdd">노드 추가</button>
     <select id="layoutMode" title="정렬 방식을 선택하면 바로 적용됩니다">
-      <option value="layered">계층 · 좌→우</option><option value="pyramid" title="인과 단계별 위에서 아래로">피라미드</option><option value="diamond" title="시작은 위, 종료는 아래에 두고 가운데를 넓힘">다이아몬드</option><option value="circle">원형</option><option value="grid">격자</option>
+      <option value="layered">계층 · 좌→우</option><option value="pyramid" title="인과 단계별 위에서 아래로">피라미드</option><option value="diamond" title="뿌리는 위, 잎은 아래에 두고 가운데를 넓힘">다이아몬드</option><option value="circle">원형</option><option value="grid">격자</option>
     </select></div>
   <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드와 바로 연결된 노드만 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
   <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReset">초기화</button></div>
@@ -81,26 +81,18 @@
       사용법은 상단의 <b>도움말</b> 버튼을 누르세요.
     </div>
     <div id="nodeForm" hidden>
-      <div class="muted" id="nodeKind"></div>
       <label>진행 상태
         <select id="f_status">
-          <option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="on_hold">보류</option><option value="stopped">중단</option><option value="failed">실패</option>
+          <option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option>
         </select>
       </label>
-      <label>역할
-        <select id="f_kind">
-          <option value="normal">일반</option><option value="start">시작</option><option value="goal">종료</option>
-        </select>
-      </label>
-      <label>제목<input id="f_title"></label>
-      <label>현재 상태<textarea id="f_now"></textarea></label>
+<label>제목<input id="f_title"></label>
       <label>메모<textarea id="f_memo"></textarea></label>
       <button id="btnOpenMd">노드 md 파일 열기</button>
       <button id="btnDelNode">이 노드 삭제</button>
     </div>
     <div id="edgeBox" hidden>
       <p id="edgeText" class="hint"></p>
-      <label>인과 설명 (어떤 행동·상황으로 이어졌나)<textarea id="e_label"></textarea></label>
       <label>메모<textarea id="e_memo"></textarea></label>
       <button id="btnDelEdge">이 화살표 삭제</button>
     </div>
@@ -117,11 +109,10 @@
     <li>빈 캔버스를 누른 채 드래그: 화면 이동</li>
     <li>노드 드래그: 위치 이동</li>
     <li>노드 선택 후 Shift+클릭 다른 노드: 화살표 연결 (원인 → 결과)</li>
-    <li>화살표를 클릭하면 그 인과의 설명과 메모를 적을 수 있습니다</li>
+    <li>화살표를 클릭하면 메모를 적을 수 있습니다</li>
     <li>노드·화살표 선택 후 Delete: 삭제</li>
-    <li>노드를 선택해 진행 상태(미착수·진행 중·완료·보류·중단·실패)와 현재 상태를 편집합니다. 상태마다 노드 색이 다릅니다</li>
+    <li>노드를 선택해 진행 상태(미착수·진행 중·완료·중단·실패)와 메모를 편집합니다. 상태마다 노드 색이 다릅니다</li>
     <li>포커스 모드: 선택 노드와 바로 연결된 노드만 표시합니다. 진행 상태와 색은 바뀌지 않으며, 포커스 종료를 누르면 전체 그래프가 다시 보입니다</li>
-    <li>노드 편집 칸에서 시작·종료 노드를 정하면 계층, 피라미드, 다이아몬드 정렬의 기준이 됩니다</li>
     <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양과 색, 선택 강조 색을 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
   </ul>
   <button id="btnHelpClose">닫기</button>
@@ -129,7 +120,7 @@
 
 <dialog id="versionDlg">
   <h2 style="margin-top:0;font-size:17px">그래프 버전 기록</h2>
-  <p class="hint">버전은 현재 상태 저장을 눌렀을 때 기록됩니다. 그래프를 초기화하거나 JSON을 불러오는 등 현재 내용을 바꾸는 작업 전에는 자동 백업합니다.</p>
+  <p class="hint">버전 기록은 현재 상태 저장을 눌렀을 때만 남습니다. 초기화·JSON 불러오기·버전 복원 전후에는 자동으로 기록하지 않습니다.</p>
   <label>수동 버전 요약 (비워 두면 자동으로 적힙니다)<input id="versionSummary" maxlength="160" placeholder="예: 실행 결과를 반영해 다음 단계를 수정"></label>
   <button id="btnCreateVersion">현재 상태 저장</button>
   <div id="versionList" class="hint" style="margin-top:16px;max-height:45vh;overflow:auto"></div>
@@ -150,11 +141,8 @@
   <label>연결선 모양
     <select id="s_lineStyle"><option value="curve">곡선</option><option value="straight">직선</option></select>
   </label>
-  <div class="cset"><span class="cl">연결선 색</span>
-    <div class="crow"><input type="text" id="s_lineColor" maxlength="7" placeholder="#9ca3af"><span class="sw" id="sw_lineColor"></span></div>
-    <div class="presets" id="p_lineColor"></div></div>
   <div class="cset"><span class="cl">선택 강조 색 (현재 선택한 노드 테두리)</span>
-    <div class="crow"><input type="text" id="s_selectionColor" maxlength="7" placeholder="#ea580c"><span class="sw" id="sw_selectionColor"></span></div>
+    <div class="crow"><input type="text" id="s_selectionColor" maxlength="7" placeholder="#000000"><span class="sw" id="sw_selectionColor"></span></div>
     <div class="presets" id="p_selectionColor"></div></div>
   <label>캔버스 바깥 여백 (px)
     <input type="number" id="s_canvasPadding" min="0" max="1000" step="20">
@@ -191,28 +179,35 @@ const KEY = 'causal-editor-v3';
 const VERSION_KEY = 'causal-editor-versions-v1';
 const SIDEBAR_KEY = 'causal-editor-sidebar-hidden-v1';
 const RECT = {w: 200, h: 110}, CIRCLE = {w: 130, h: 130};
-const DEFAULT_SETTINGS = {shape:'rect', nodeColor:'#ffffff', bgColor:'#fafafa', lineStyle:'curve', lineColor:'#9ca3af', selectionColor:'#ea580c', canvasPadding:120};
-const NODE_FIELDS = [['f_title','title'],['f_now','now'],['f_memo','memo']];
+const DEFAULT_SETTINGS = {shape:'rect', nodeColor:'#ffffff', bgColor:'#fafafa', lineStyle:'curve', selectionColor:'#000000', canvasPadding:120};
+const NODE_FIELDS = [['f_title','title'],['f_memo','memo']];
 const NODE_STATUSES = {
   not_started: {label:'미착수', color:'#94a3b8'},
   in_progress: {label:'진행 중', color:'#2563eb'},
   completed: {label:'완료', color:'#16a34a'},
-  on_hold: {label:'보류', color:'#d97706'},
   stopped: {label:'중단', color:'#64748b'},
   failed: {label:'실패', color:'#dc2626'}
 };
-const EDGE_FIELDS = [['e_label','label'],['e_memo','memo']];
+const EDGE_FIELDS = [['e_memo','memo']];
 const SELECT_CTRL = [['s_shape','shape'],['s_lineStyle','lineStyle']];
-const COLOR_CTRL = ['nodeColor','bgColor','lineColor','selectionColor'];   // 네이티브 색상 창 대신 입력칸 + 색 견본 방식
+const COLOR_CTRL = ['nodeColor','bgColor','selectionColor'];   // 네이티브 색상 창 대신 입력칸 + 색 견본 방식
 const PRESETS = {
   nodeColor: ['#ffffff','#f8fafc','#fef9c3','#dcfce7','#dbeafe','#fce7f3'],
   bgColor: ['#fafafa','#f4f5f7','#f5f0e6','#ffffff','#1e293b','#0f172a'],
-  lineColor: ['#9ca3af','#6b7280','#475569','#a8a29e','#94a3b8','#cbd5e1'],
-  selectionColor: ['#ea580c','#dc2626','#7c3aed','#0891b2','#db2777','#111827']
+  selectionColor: ['#000000','#111827','#475569','#7c3aed','#0891b2','#dc2626']
 };
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const trunc = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n) + '…' : s; };
+const titleLines = (s, maxChars, maxLines = 2) => {
+  const chars = Array.from(String(s ?? '').replace(/\s+/g, ' ').trim()), lines = [];
+  for (let i = 0; i < maxLines && chars.length; i++) {
+    let line = chars.splice(0, maxChars).join('');
+    if (i === maxLines - 1 && chars.length) line = Array.from(line).slice(0, -1).join('') + '…';
+    lines.push(line);
+  }
+  return lines;
+};
 const today = () => new Date().toISOString().slice(0, 10);
 const svg = $('#canvas');
 
@@ -223,13 +218,13 @@ let zoom = 1, lastCW = 800, lastCH = 600, viewMinX = 0, viewMinY = 0;   // 확�
 let VERSION_LIST = [];
 
 /* ---------- 데이터 ----------
-   노드 = 하나의 상태 (제목, 진행 상태, 현재 상태, 메모, 위치)
-   화살표 = 인과 (원인 노드 → 결과 노드, 설명, 메모)
+   노드 = 하나의 상태 (제목, 진행 상태, 메모, 위치)
+   화살표 = 인과 (원인 노드 → 결과 노드, 메모)
    설정(settings)도 데이터와 함께 저장됩니다. */
 function initial() {
   return {nextId: 1, nodes: [], edges: [], settings: {...DEFAULT_SETTINGS}};
 }
-function ensureSettings() { S.settings = Object.assign({}, DEFAULT_SETTINGS, S.settings || {}); delete S.settings.highlightColor; }
+function ensureSettings() { S.settings = Object.assign({}, DEFAULT_SETTINGS, S.settings || {}); if (!S.settings.selectionColor || S.settings.selectionColor === '#ea580c') S.settings.selectionColor = '#000000'; delete S.settings.highlightColor; delete S.settings.lineColor; }
 function load() { try { const v = localStorage.getItem(KEY); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
@@ -341,10 +336,16 @@ function normalizeNodeStatuses() {
   for (const n of S.nodes || []) {
     if (!NODE_STATUSES[n.status]) n.status = 'not_started';
     delete n.checked;
+    delete n.now;
+    delete n.kind;
+  }
+  for (const e of S.edges || []) {
+    if (e.label) e.memo = [e.memo, e.label].filter(Boolean).join(' / ');
+    delete e.label;
   }
 }
-const startNodes = () => S.nodes.filter(n => n.kind === 'start');
-const goalNodes = () => S.nodes.filter(n => n.kind === 'goal');
+const startNodes = () => { const targets = new Set(S.edges.map(e => e.to)), sources = new Set(S.edges.map(e => e.from)); return S.nodes.filter(n => !targets.has(n.id) && sources.has(n.id)); };
+const goalNodes = () => { const sources = new Set(S.edges.map(e => e.from)), targets = new Set(S.edges.map(e => e.to)); return S.nodes.filter(n => !sources.has(n.id) && targets.has(n.id)); };
 const dims = () => S.settings.shape === 'circle' ? CIRCLE : RECT;
 const pushTo = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
 
@@ -357,17 +358,14 @@ function reach(starts, adj) {
   return seen;
 }
 
-// 시작에서 종료까지 이어지는 노드/화살표 판별
 function analyze() {
-  if (!startNodes().length || !goalNodes().length) return {onNode: () => false, onEdge: () => false};   // 시작·종료가 정해지지 않으면 강조 없음
+  const starts = startNodes(), goals = goalNodes();
+  if (!starts.length || !goals.length) return {onNode: () => false, onEdge: () => false};
   const fwd = new Map(), rev = new Map();
   for (const e of S.edges) { pushTo(fwd, e.from, e.to); pushTo(rev, e.to, e.from); }
-  const fromStart = reach(startNodes().map(n => n.id), fwd);
-  const toGoal = reach(goalNodes().map(n => n.id), rev);
-  return {
-    onNode: id => fromStart.has(id) && toGoal.has(id),
-    onEdge: e => fromStart.has(e.from) && toGoal.has(e.to)
-  };
+  const fromStart = reach(starts.map(n => n.id), fwd);
+  const toGoal = reach(goals.map(n => n.id), rev);
+  return {onNode: id => fromStart.has(id) && toGoal.has(id), onEdge: e => fromStart.has(e.from) && toGoal.has(e.to)};
 }
 
 /* ---------- 렌더링 ---------- */
@@ -383,7 +381,8 @@ function render() {
     }
   }
   $('#stage').style.background = st.bgColor;
-  let h = `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#555"/></marker></defs>`;
+  const markerColors = new Set(Object.values(NODE_STATUSES).map(status => status.color));
+  let h = `<defs>${[...markerColors].map(color => `<marker id="arr-${color.slice(1)}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="${color}"/></marker>`).join('')}</defs>`;
 
   for (const e of S.edges) {
     if (!visibleNodeIds.has(e.from) || !visibleNodeIds.has(e.to)) continue;
@@ -398,32 +397,40 @@ function render() {
       const dx = Math.max(40, Math.abs(x2 - x1) / 2) * (forward ? 1 : -1);
       d = `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
     }
-    const color = st.lineColor;
-    const w = 1 + (sel.type === 'edge' && sel.id === e.id ? 2 : 0);
-    h += `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" marker-end="url(#arr)"/>`;
+    const aStatus = NODE_STATUSES[a.status] || NODE_STATUSES.not_started;
+    const bStatus = NODE_STATUSES[b.status] || NODE_STATUSES.not_started;
+    const sameStatus = a.status === b.status;
+    const color = sameStatus ? aStatus.color : bStatus.color;
+    const stroke = sameStatus ? color : `url(#grad-${esc(e.id)})`;
+    const w = (a.status === 'completed' && b.status === 'completed' ? 3 : 1) + (sel.type === 'edge' && sel.id === e.id ? 2 : 0);
+    if (!sameStatus) h += `<defs><linearGradient id="grad-${esc(e.id)}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0%" stop-color="${aStatus.color}"/><stop offset="50%" stop-color="${aStatus.color}"/><stop offset="50%" stop-color="${bStatus.color}"/><stop offset="100%" stop-color="${bStatus.color}"/></linearGradient></defs>`;
+    h += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${w}" marker-end="url(#arr-${color.slice(1)})"/>`;
     const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 8;
-    const tag = e.label ? trunc(e.label, 16) : '';
-    h += `<text x="${mx}" y="${my}" font-size="11" fill="${color}" text-anchor="middle" paint-order="stroke" stroke="${st.bgColor}" stroke-width="4">${esc(tag)}</text>`;
+    const edgeMemoSummary = e.memo ? titleLines(e.memo, 14, 1)[0] : '';
+    if (edgeMemoSummary) h += `<text x="${mx}" y="${my}" font-size="11" fill="#222" text-anchor="middle" paint-order="stroke" stroke="${st.bgColor}" stroke-width="4" pointer-events="none"><title>${esc(e.memo)}</title>${esc(edgeMemoSummary)}</text>`;
     h += `<path d="${d}" fill="none" stroke="transparent" stroke-width="14" data-edge="${e.id}" style="cursor:pointer"/>`;
   }
 
   for (const n of S.nodes) {
     if (!visibleNodeIds.has(n.id)) continue;
     const isSel = sel.type === 'node' && sel.id === n.id;
-    const fill = n.kind === 'start' ? '#ecfdf5' : n.kind === 'goal' ? '#fef2f2' : st.nodeColor;
+    const fill = st.nodeColor;
     const status = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
     const stroke = isSel ? selectionColor : status.color;
     const sw = isSel ? 4 : 3;
     let body;
+    const titleRows = titleLines(n.title, st.shape === 'circle' ? 8 : 12);
+    const memoRows = n.memo ? titleLines(n.memo, st.shape === 'circle' ? 8 : 16, 1) : [];
+    const memoSummary = memoRows[0] || '';
     if (st.shape === 'circle') {
       body = `<circle cx="${W / 2}" cy="${H / 2}" r="${W / 2 - 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
-        <text x="${W / 2}" y="${H / 2 - 6}" font-size="13" font-weight="700" fill="#222" text-anchor="middle">${esc(trunc(n.title, 10))}</text>
-        <text x="${W / 2}" y="${H / 2 + 12}" font-size="11" fill="#333" text-anchor="middle">${esc(trunc(n.now, 12))}</text>
+        <text x="${W / 2}" y="${H / 2 - (titleRows.length > 1 ? 15 : 7)}" font-size="13" font-weight="700" fill="#222" text-anchor="middle">${titleRows.map((line, i) => `<tspan x="${W / 2}" dy="${i ? 15 : 0}">${esc(line)}</tspan>`).join('')}</text>
+        ${memoSummary ? `<text x="${W / 2}" y="${H / 2 + 15}" font-size="10" fill="#555" text-anchor="middle"><title>${esc(n.memo)}</title>${esc(memoSummary)}</text>` : ''}
         <text x="${W / 2}" y="${H / 2 + 34}" font-size="10" font-weight="700" fill="${status.color}" text-anchor="middle">${status.label}</text>`;
     } else {
       body = `<rect width="${W}" height="${H}" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
-        <text x="10" y="24" font-size="14" font-weight="700" fill="#222">${esc(trunc(n.title, 16))}</text>
-        <text x="10" y="50" font-size="12" fill="#333">${esc(trunc(n.now, 22))}</text>
+        <text x="10" y="22" font-size="14" font-weight="700" fill="#222">${titleRows.map((line, i) => `<tspan x="10" dy="${i ? 17 : 0}">${esc(line)}</tspan>`).join('')}</text>
+        ${memoSummary ? `<text x="10" y="58" font-size="11" fill="#555"><title>${esc(n.memo)}</title>${esc(memoSummary)}</text>` : ''}
         <rect x="10" y="72" width="${status.label.length * 13 + 14}" height="22" rx="11" fill="${status.color}" fill-opacity=".14"/>
         <text x="17" y="87" font-size="11" font-weight="700" fill="${status.color}">${status.label}</text>`;
     }
@@ -454,9 +461,7 @@ function renderPanel() {
   $('#nodeForm').hidden = !n;
   $('#edgeBox').hidden = !e;
   if (n) {
-    $('#nodeKind').textContent = n.kind === 'start' ? '시작 노드' : n.kind === 'goal' ? '종료 노드' : '일반 노드';
     for (const [id, key] of NODE_FIELDS) $('#' + id).value = n[key] ?? '';
-    $('#f_kind').value = n.kind || 'normal';
     $('#f_status').value = n.status || 'not_started';
   }
   if (e) {
@@ -507,13 +512,13 @@ function freeNodeId() {
 
 function addNode(x, y) {
   const id = freeNodeId();
-  S.nodes.push({id, kind:'normal', status:'not_started', title:'새 노드', now:'', x: Math.max(0, x), y: Math.max(0, y), memo:''});
+  S.nodes.push({id, status:'not_started', title:'새 노드', x: Math.max(0, x), y: Math.max(0, y), memo:''});
   save(); select('node', id);
 }
 
 function addEdge(a, b) {
   if (!S.edges.some(e => e.from === a && e.to === b)) {
-    S.edges.push({id: 'e' + S.nextId++, from: a, to: b, label: '', memo: ''});
+    S.edges.push({id: 'e' + S.nextId++, from: a, to: b, memo: ''});
     save();
   }
   select('node', b);
@@ -558,15 +563,14 @@ const fileName = n => `n${n.id.slice(1).padStart(4, '0')}_${(n.title || '노드'
 const linkTo = n => `[${n.title}](${encodeURI(fileName(n))})`;
 
 function nodeMd(n) {
-  const kind = n.kind === 'start' ? ' (시작)' : n.kind === 'goal' ? ' (종료)' : '';
   const status = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
-  const L = [`# ${n.title}${kind}`, '', `## 진행 상태`, '', status.label, '', '## 현재 상태', '', n.now || '_(비어 있음)_', ''];
+  const L = [`# ${n.title}`, '', `## 진행 상태`, '', status.label, ''];
   if (n.memo) L.push('## 메모', '', n.memo, '');
 
   const incoming = S.edges.filter(e => e.to === n.id);
   const outgoing = S.edges.filter(e => e.from === n.id);
   const arrowLines = (e, other) => {
-    const out = [`- ${linkTo(other)} — ${e.label || '인과'}`];
+    const out = [`- ${linkTo(other)}`];
     if (e.memo) out.push(`  - 메모: ${e.memo}`);
     return out;
   };
@@ -581,12 +585,12 @@ function nodeMd(n) {
 }
 
 function pathsMd() {
-  const L = ['# 시작에서 종료까지의 경로', '', `- 내보낸 날짜: ${today()}`, ''];
+  const L = ['# 뿌리에서 잎까지의 경로', '', `- 내보낸 날짜: ${today()}`, ''];
   const paths = enumeratePaths(20);
-  if (!paths.length) L.push('_시작 노드와 종료 노드를 정하고 그 사이를 화살표로 이으면 경로가 표시됩니다._');
+  if (!paths.length) L.push('_뿌리 노드에서 잎 노드까지 이어지는 화살표 경로가 없습니다._');
   else paths.forEach((p, i) => {
     const parts = [linkTo(node(edge(p[0]).from))];
-    for (const eid of p) { const e = edge(eid); parts.push(`[${e.label || '인과'}]`, linkTo(node(e.to))); }
+    for (const eid of p) { const e = edge(eid); parts.push(linkTo(node(e.to))); }
     L.push(`${i + 1}. ${parts.join(' → ')}`);
   });
   return L.join('\n') + '\n';
@@ -824,12 +828,6 @@ EDGE_FIELDS.forEach(([id, key]) => $('#' + id).addEventListener('input', e => {
   const x = edge(sel.id); if (!x) return;
   x[key] = e.target.value; save(); render();
 }));
-
-$('#f_kind').addEventListener('change', e => {
-  const n = node(sel.id); if (!n) return;
-  const k = e.target.value;
-  n.kind = k; save(); render(); renderPanel();
-});
 $('#f_status').addEventListener('change', e => {
   const n = node(sel.id); if (!n) return;
   n.status = NODE_STATUSES[e.target.value] ? e.target.value : 'not_started'; save(); render();
@@ -898,8 +896,7 @@ $('#versionList').addEventListener('click', async e => {
   }
   if (restore) {
     const v = versions().find(x => x.id === restore.dataset.versionRestore);
-    if (!v || !confirm(`“${v.summary}” 버전으로 그래프 전체를 복원할까요? 현재 상태는 복원 전 버전으로 자동 보관됩니다.`)) return;
-    if (!await createVersion('복원 전 자동 백업')) { alert('현재 상태를 변경이력 폴더에 백업하지 못해 복원을 취소했습니다.'); return; }
+    if (!v || !confirm(`“${v.summary}” 버전으로 그래프 전체를 복원할까요? 현재 그래프는 버전 기록에 자동 저장되지 않습니다.`)) return;
     await applyGraph(v.data); renderVersions();
   }
   if (remove) {
@@ -966,9 +963,7 @@ $('#btnSave').onclick = () => download('causal-editor.json', JSON.stringify(S, n
 async function importGraphFile(text) {
   const o = JSON.parse(text);
   if (!Array.isArray(o.nodes)) throw new Error('bad');
-  if (!await createVersion('JSON 불러오기 전 자동 백업')) throw new Error('현재 상태를 변경이력 폴더에 백업하지 못했습니다.');
   await applyGraph(o);
-  await createVersion('JSON 파일 불러옴');
 }
 
 $('#file').addEventListener('change', async e => {
@@ -1033,12 +1028,10 @@ $('#btnOpenMd').onclick = async () => {
 $('#btnDelEdge').onclick = deleteSelected;
 $('#btnReset').onclick = async () => {
   if (!confirm('모든 노드와 화살표를 지우고 처음부터 시작할까요? (설정은 유지됩니다)')) return;
-  if (!await createVersion('초기화 전 자동 백업')) { alert('현재 상태를 변경이력 폴더에 백업하지 못해 초기화를 취소했습니다.'); return; }
   const keep = S.settings;
   S = initial(); S.settings = keep;
   await applyGraph(S);
-  await createVersion('그래프 초기화');
-  setFstat('새 빈 그래프로 초기화했습니다. 이전 상태는 버전 기록에 보관했습니다.');
+  setFstat('새 빈 그래프로 초기화했습니다.');
 };
 
 document.addEventListener('keydown', e => {
