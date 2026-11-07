@@ -39,6 +39,9 @@
   .graph-choice{width:100%;padding:8px 9px;text-align:left;white-space:normal;font-size:12px;line-height:1.45}
   .graph-choice.active{border-color:#2563eb;background:#eff6ff;color:#1d4ed8}
   .graph-choice small{display:block;color:#667085;font-size:11px;margin-top:2px}
+  .graph-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+  .graph-row .graph-choice{flex:1;min-width:0}
+  #graphList{max-height:55vh;overflow:auto;margin-top:8px}
   #help{color:#667085;font-size:13px;line-height:1.75}
   aside label{display:block;font-size:12px;color:#555;margin-top:10px}
   aside input,aside textarea,aside select{width:100%;box-sizing:border-box;padding:6px;border:1px solid #ccc;border-radius:6px;font:inherit;margin-top:3px}
@@ -76,16 +79,12 @@
       <option value="layered">계층 · 좌→우</option><option value="pyramid" title="인과 단계별 위에서 아래로">피라미드</option><option value="diamond" title="시작은 위, 종료는 아래에 두고 가운데를 넓힘">다이아몬드</option><option value="circle">원형</option><option value="grid">격자</option>
     </select></div>
   <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드와 바로 연결된 노드만 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
-  <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReset">초기화</button></div>
+  <div class="toolbar-group"><button id="btnGraphs">그래프 목록</button><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReset">초기화</button></div>
   <span id="fstat" class="muted"></span>
 </header>
 <main>
   <div id="stage"><div id="tip"></div><svg id="canvas" width="2400" height="1600"></svg></div>
   <aside>
-    <section id="graphLibrary" aria-label="그래프 목록">
-      <h2>그래프 목록</h2>
-      <div id="graphList" class="hint">저장된 그래프를 불러오는 중…</div>
-    </section>
     <div id="help" class="hint">
       오른쪽 그래프 목록에서 예시나 저장된 그래프를 선택해 전환할 수 있습니다.<br><br>
       노드나 화살표를 클릭하면 여기에서 내용을 편집할 수 있습니다.<br>
@@ -116,6 +115,17 @@
 
 <div id="canvasMenu" role="menu" aria-label="캔버스 메뉴" hidden></div>
 
+<dialog id="graphDlg" style="max-width:560px;width:90vw">
+  <h2 style="margin-top:0;font-size:17px">그래프 목록</h2>
+  <p class="hint">이름을 누르면 그 그래프로 바꿉니다. 삭제한 그래프 폴더는 변경이력 폴더의 '삭제된_그래프'로 옮겨져 복구할 수 있습니다. 지금 열려 있는 그래프는 삭제할 수 없습니다.</p>
+  <div id="graphList" class="hint">저장된 그래프를 불러오는 중…</div>
+  <div class="merge-box">
+    <div class="muted">왼쪽 체크칸으로 2개 이상 고른 뒤 합치면, 노드와 화살표를 모은 새 그래프가 만들어집니다. 원래 그래프는 그대로 남습니다.</div>
+    <label>새 그래프 이름<input id="mergeName" placeholder="합친_그래프"></label>
+    <button id="btnMerge" type="button">체크한 그래프 합치기</button>
+  </div>
+  <button id="btnGraphClose" type="button">닫기</button>
+</dialog>
 <dialog id="helpDlg">
   <h2 style="margin-top:0;font-size:17px">도움말</h2>
   <ul class="hint" style="padding-left:18px;margin:0">
@@ -146,8 +156,8 @@
   </div>
   <div id="versionIntervalStatus" class="muted"></div>
   <button id="btnSaveVersionInterval">저장 주기 적용</button>
-  <label>수동 버전 요약<input id="versionSummary" maxlength="160" placeholder="예: 실행 결과를 반영해 다음 단계를 수정"></label>
-  <button id="btnCreateVersion">현재 상태를 설명과 함께 저장</button>
+  <label>수동 버전 요약 (비워 두면 자동으로 적힙니다)<input id="versionSummary" maxlength="160" placeholder="예: 실행 결과를 반영해 다음 단계를 수정"></label>
+  <button id="btnCreateVersion">현재 상태 저장</button>
   <div id="versionList" class="hint" style="margin-top:16px;max-height:45vh;overflow:auto"></div>
   <button id="btnVersionClose">닫기</button>
 </dialog>
@@ -180,12 +190,19 @@
   </label>
   <div class="muted">그래프 주위에 확보할 빈 작업 공간입니다. 전체 그래프 보기에도 포함됩니다.</div>
   <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-    <label class="btn">JSON 불러오기<input type="file" id="file" accept=".json"></label>
+    <button id="btnPickProject" type="button">JSON 불러오기</button>
+    <label class="btn">다른 위치에서 고르기<input type="file" id="file" accept=".json"></label>
     <button id="btnLoadExample" type="button">예시 가져오기</button>
     <button id="btnSave">JSON 저장</button>
     <button id="btnSettingsDefault">기본값으로</button>
   </div>
   <button id="btnSetClose">닫기</button>
+</dialog>
+<dialog id="pickDlg" style="max-width:560px;width:90vw">
+  <h3>프로젝트 폴더의 JSON 고르기</h3>
+  <div class="muted">리얼리티코딩_인과편집기 폴더 안의 JSON 파일입니다. 고른 파일로 현재 화면을 바꿉니다.</div>
+  <div id="pickList" style="max-height:50vh;overflow:auto;margin:8px 0"></div>
+  <button id="btnPickClose" type="button">닫기</button>
 </dialog>
 
 <script>
@@ -340,7 +357,25 @@ function scheduleVersionCheck(reset = false) {
 function renderVersions() {
   const list = versions(), box = $('#versionList');
   if (!list.length) { box.innerHTML = '<p>아직 저장된 버전이 없습니다.</p>'; return; }
-  box.innerHTML = list.map(v => `<div style="border-top:1px solid #ddd;padding:10px 0"><b>${esc(new Date(v.at).toLocaleString())}</b><br>${esc(v.summary)}<br><span style="font-size:12px;color:#777">노드 ${v.data?.nodes?.length || 0}개 · 화살표 ${v.data?.edges?.length || 0}개</span><br><button data-version-open="${esc(v.id)}">JSON 내려받기</button> <button data-version-restore="${esc(v.id)}">이 버전 복원</button> <button data-version-delete="${esc(v.id)}">삭제</button></div>`).join('');
+  const toolbar = `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-bottom:8px"><label><input type="checkbox" id="verPickAll"> 전체 선택</label><button id="btnDeleteSelectedVersions" type="button">선택 삭제</button></div>`;
+  box.innerHTML = toolbar + list.map(v => `<div style="border-top:1px solid #ddd;padding:10px 0;display:flex;gap:8px;align-items:flex-start"><input type="checkbox" class="ver-pick" data-version-pick="${esc(v.id)}" style="margin-top:4px"><div><b>${esc(new Date(v.at).toLocaleString())}</b><br>${esc(v.summary)}<br><span style="font-size:12px;color:#777">노드 ${v.data?.nodes?.length || 0}개 · 화살표 ${v.data?.edges?.length || 0}개</span><br><button data-version-open="${esc(v.id)}">JSON 내려받기</button> <button data-version-restore="${esc(v.id)}">이 버전 복원</button> <button data-version-delete="${esc(v.id)}">삭제</button></div></div>`).join('');
+}
+async function deleteVersionsBulk(ids) {
+  if (!ids.length) { alert('삭제할 버전을 체크하세요.'); return; }
+  if (!confirm(`체크한 버전 ${ids.length}개를 삭제할까요? 삭제한 버전 파일은 복구할 수 없습니다.`)) return;
+  const latestId = VERSION_LIST[0]?.id;
+  let failed = 0;
+  for (const id of ids) {
+    try {
+      const r = await fetch(`/api/versions/${encodeURIComponent(id)}`, {method: 'DELETE'});
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || '삭제하지 못했습니다.');
+      VERSION_LIST = VERSION_LIST.filter(item => item.id !== id);
+    } catch (err) { failed++; }
+  }
+  if (ids.includes(latestId)) lastVersionSnapshot = JSON.stringify(VERSION_LIST[0]?.data ?? S);
+  renderVersions(); renderGraphLibrary();
+  setFstat(`버전 ${ids.length - failed}개를 삭제했습니다${failed ? ` (실패 ${failed}개)` : ''}.`);
 }
 
 function sameGraph(a, b) {
@@ -398,12 +433,44 @@ function renderGraphLibrary() {
   box.replaceChildren();
   if (!GRAPH_LIST.length) { box.textContent = '그래프 JSON이 들어 있는 폴더가 없습니다.'; return; }
   for (const graph of GRAPH_LIST) {
+    const row = document.createElement('div');
+    row.className = 'graph-row';
     const button = document.createElement('button');
     button.type = 'button'; button.className = 'graph-choice';
     if (graph.id === activeGraphId) button.classList.add('active');
     button.textContent = graph.name.replaceAll('_', ' ');
     button.addEventListener('click', () => loadGraphFolder(graph.id));
-    box.appendChild(button);
+    const pick = document.createElement('input');
+    pick.type = 'checkbox'; pick.className = 'merge-pick'; pick.value = graph.id; pick.title = '합치기 대상으로 고르기';
+    const rename = document.createElement('button');
+    rename.type = 'button'; rename.textContent = '이름'; rename.title = '그래프 이름 바꾸기';
+    rename.addEventListener('click', () => renameGraph(graph.id));
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = '삭제';
+    del.disabled = graph.id === activeGraphId;
+    del.title = graph.id === activeGraphId ? '현재 열린 그래프는 삭제할 수 없습니다' : '이 그래프를 삭제합니다 (복구 가능)';
+    del.addEventListener('click', () => deleteGraphFolder(graph.id));
+    row.append(pick, button, rename, del);
+    box.appendChild(row);
+  }
+}
+
+async function deleteGraphFolder(id) {
+  const graph = GRAPH_LIST.find(g => g.id === id);
+  if (!graph) return;
+  if (id === activeGraphId) { alert('현재 열려 있는 그래프는 삭제할 수 없습니다. 다른 그래프로 바꾼 뒤 삭제하세요.'); return; }
+  const name = graph.name.replaceAll('_', ' ');
+  if (!confirm(`'${name}' 그래프를 삭제할까요?\n폴더는 변경이력 폴더의 '삭제된_그래프'로 옮겨져 나중에 복구할 수 있습니다.`)) return;
+  try {
+    const r = await fetch(`/api/graphs/${encodeURIComponent(id)}`, {method: 'DELETE'});
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    GRAPH_LIST = GRAPH_LIST.filter(g => g.id !== id);
+    renderGraphLibrary();
+    setFstat(`그래프를 삭제했습니다: ${name}`);
+  } catch (err) {
+    alert(`그래프 삭제 실패: ${err.message}`);
   }
 }
 
@@ -437,6 +504,7 @@ async function loadGraphFolder(id) {
   if (!graph || id === activeGraphId) return;
   if (!await prepareGraphSwitch()) return;
   await applyGraph(graph.data, graph.id);
+  $('#graphDlg').close();
   setFstat(`그래프를 불러왔습니다: ${graph.name.replaceAll('_', ' ')}`);
 }
 
@@ -461,8 +529,8 @@ async function loadGraphVersion(id) {
 
 const node = id => S.nodes.find(n => n.id === id);
 const edge = id => S.edges.find(e => e.id === id);
-const startNode = () => S.nodes.find(n => n.kind === 'start');
-const goalNode = () => S.nodes.find(n => n.kind === 'goal');
+const startNodes = () => S.nodes.filter(n => n.kind === 'start');
+const goalNodes = () => S.nodes.filter(n => n.kind === 'goal');
 const dims = () => S.settings.shape === 'circle' ? CIRCLE : RECT;
 const pushTo = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
 
@@ -477,11 +545,11 @@ function reach(starts, adj) {
 
 // 시작에서 종료까지 이어지는 노드/화살표 판별
 function analyze() {
-  if (!startNode() || !goalNode()) return {onNode: () => false, onEdge: () => false};   // 시작·종료가 정해지지 않으면 강조 없음
+  if (!startNodes().length || !goalNodes().length) return {onNode: () => false, onEdge: () => false};   // 시작·종료가 정해지지 않으면 강조 없음
   const fwd = new Map(), rev = new Map();
   for (const e of S.edges) { pushTo(fwd, e.from, e.to); pushTo(rev, e.to, e.from); }
-  const fromStart = reach([startNode().id], fwd);
-  const toGoal = reach([goalNode().id], rev);
+  const fromStart = reach(startNodes().map(n => n.id), fwd);
+  const toGoal = reach(goalNodes().map(n => n.id), rev);
   return {
     onNode: id => fromStart.has(id) && toGoal.has(id),
     onEdge: e => fromStart.has(e.from) && toGoal.has(e.to)
@@ -658,17 +726,21 @@ function deleteSelected() {
 function enumeratePaths(limit) {
   const adj = new Map();
   for (const e of S.edges) pushTo(adj, e.from, e.id);
-  if (!startNode() || !goalNode()) return [];
-  const s = startNode().id, t = goalNode().id, out = [], vis = new Set([s]);
-  (function go(u, path) {               // path: 화살표 id 목록
-    if (out.length >= limit) return;
-    if (u === t) { out.push([...path]); return; }
-    for (const eid of adj.get(u) || []) {
-      const v = edge(eid).to;
-      if (vis.has(v)) continue;
-      vis.add(v); path.push(eid); go(v, path); path.pop(); vis.delete(v);
-    }
-  })(s, []);
+  const starts = startNodes().map(n => n.id), targets = new Set(goalNodes().map(n => n.id));
+  if (!starts.length || !targets.size) return [];
+  const out = [];
+  for (const s of starts) {
+    const vis = new Set([s]);
+    (function go(u, path) {               // path: 화살표 id 목록
+      if (out.length >= limit) return;
+      if (targets.has(u)) { out.push([...path]); return; }
+      for (const eid of adj.get(u) || []) {
+        const v = edge(eid).to;
+        if (vis.has(v)) continue;
+        vis.add(v); path.push(eid); go(v, path); path.pop(); vis.delete(v);
+      }
+    })(s, []);
+  }
   return out;
 }
 
@@ -702,7 +774,7 @@ function pathsMd() {
   const paths = enumeratePaths(20);
   if (!paths.length) L.push('_시작 노드와 종료 노드를 정하고 그 사이를 화살표로 이으면 경로가 표시됩니다._');
   else paths.forEach((p, i) => {
-    const parts = [linkTo(startNode())];
+    const parts = [linkTo(node(edge(p[0]).from))];
     for (const eid of p) { const e = edge(eid); parts.push(`[${e.label || '인과'}]`, linkTo(node(e.to))); }
     L.push(`${i + 1}. ${parts.join(' → ')}`);
   });
@@ -762,7 +834,7 @@ function autoLayout(mode) {
     // 계층: 시작 노드(없으면 들어오는 화살표가 없는 노드)에서 화살표를 따라 단계별로 열을 나눔
     const adj = new Map(), hasIn = new Set();
     for (const e of S.edges) { pushTo(adj, e.from, e.to); hasIn.add(e.to); }
-    let roots = startNode() ? [startNode().id] : S.nodes.filter(n => !hasIn.has(n.id)).map(n => n.id);
+    let roots = startNodes().length ? startNodes().map(n => n.id) : S.nodes.filter(n => !hasIn.has(n.id)).map(n => n.id);
     if (!roots.length) roots = [S.nodes[0].id];
     const level = new Map(), q = [];
     for (const r of roots) { level.set(r, 0); q.push(r); }
@@ -772,7 +844,7 @@ function autoLayout(mode) {
     }
     const maxL = Math.max(0, ...level.values());
     for (const n of S.nodes) if (!level.has(n.id)) level.set(n.id, maxL + 1);   // 연결 안 된 노드는 맨 오른쪽 열
-    if (mode === 'diamond' && goalNode()) level.set(goalNode().id, Math.max(...level.values()) + 1);
+    if (mode === 'diamond' && goalNodes().length) { const gl = Math.max(...level.values()) + 1; for (const g of goalNodes()) level.set(g.id, gl); }
     const cols = new Map();
     for (const n of S.nodes) { const L = level.get(n.id); if (!cols.has(L)) cols.set(L, []); cols.get(L).push(n); }
     const ordered = [...cols].sort((a, b) => a[0] - b[0]);
@@ -955,7 +1027,6 @@ EDGE_FIELDS.forEach(([id, key]) => $('#' + id).addEventListener('input', e => {
 $('#f_kind').addEventListener('change', e => {
   const n = node(sel.id); if (!n) return;
   const k = e.target.value;
-  if (k !== 'normal') for (const m of S.nodes) if (m.kind === k) m.kind = 'normal';   // 시작·종료는 하나만
   n.kind = k; save(); render(); renderPanel();
 });
 $('#f_checked').addEventListener('change', e => {
@@ -986,18 +1057,112 @@ $('#btnSettingsDefault').onclick = () => { S.settings = {...DEFAULT_SETTINGS}; s
 $('#layoutMode').onchange = () => { autoLayout($('#layoutMode').value); fitView(); };
 $('#btnFit').onclick = fitView;
 $('#btnZoom100').onclick = () => { zoom = 1; render(); };
+
+// Ctrl+휠: 브라우저 배율 대신 캔버스만 조금씩 확대·축소합니다. 커서 아래의 점이 그대로 머물도록 맞춥니다.
+$('#stage').addEventListener('wheel', e => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  const stage = $('#stage'), rect = stage.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+  const worldX = (stage.scrollLeft + cx) / zoom + viewMinX, worldY = (stage.scrollTop + cy) / zoom + viewMinY;
+  zoom = Math.min(3, Math.max(0.2, zoom * Math.exp(-e.deltaY * 0.0015)));
+  render();
+  stage.scrollLeft = (worldX - viewMinX) * zoom - cx;
+  stage.scrollTop = (worldY - viewMinY) * zoom - cy;
+}, {passive: false});
 $('#btnFocus').onclick = toggleFocusMode;
 $('#btnSidebar').onclick = () => setSidebarVisible($('aside').hidden, true);
 $('#btnSettings').onclick = () => { renderSettings(); $('#setDlg').showModal(); };
 $('#btnVersions').onclick = () => { fillVersionIntervalInputs(); renderVersions(); $('#versionDlg').showModal(); };
 $('#btnVersionClose').onclick = () => $('#versionDlg').close();
+async function renameGraph(id) {
+  const graph = GRAPH_LIST.find(g => g.id === id);
+  if (!graph) return;
+  const input = prompt('새 이름을 입력하세요. 한글, 영문, 숫자, _, - 만 쓸 수 있고 띄어쓰기는 _로 바뀝니다.', graph.name.replaceAll('_', ' '));
+  if (input === null) return;
+  const name = input.trim().replace(/\s+/g, '_');
+  if (!name || name === graph.id) return;
+  try {
+    if (id === activeGraphId) { clearTimeout(graphSaveTimer); await persistGraph(id, S); }
+    const r = await fetch(`/api/graphs/${encodeURIComponent(id)}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})});
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    GRAPH_LIST = GRAPH_LIST.map(g => g.id === id ? {...g, id: d.id, name: d.name} : g);
+    if (id === activeGraphId) {
+      activeGraphId = d.id;
+      try { localStorage.setItem(GRAPH_ACTIVE_KEY, activeGraphId); } catch (e) {}
+    }
+    renderGraphLibrary();
+    setFstat(`그래프 이름을 바꿨습니다: ${d.name.replaceAll('_', ' ')}`);
+  } catch (err) {
+    alert(`이름 바꾸기 실패: ${err.message}`);
+  }
+}
+
+// 여러 그래프의 노드와 화살표를 하나로 모읍니다. 번호는 새로 매기고, 그래프끼리 겹치지 않게 옆으로 밀어 배치합니다.
+function mergeGraphData(list) {
+  const out = {nextId: 1, settings: JSON.parse(JSON.stringify(list[0].settings || S.settings)), nodes: [], edges: []};
+  let next = 1, edgeNext = 1, offsetX = 0;
+  for (const data of list) {
+    const map = new Map();
+    let maxX = 0;
+    for (const n of data.nodes || []) {
+      const newId = `n${next++}`;
+      map.set(n.id, newId);
+      const x = (Number(n.x) || 0) + offsetX;
+      maxX = Math.max(maxX, x);
+      out.nodes.push({...n, id: newId, x, kind: n.kind || 'normal'});
+    }
+    for (const e of data.edges || []) {
+      if (!map.has(e.from) || !map.has(e.to)) continue;
+      out.edges.push({...e, id: `e${edgeNext++}`, from: map.get(e.from), to: map.get(e.to)});
+    }
+    offsetX = maxX + 300;
+  }
+  out.nextId = next;
+  return out;
+}
+
+async function mergeSelectedGraphs() {
+  const ids = [...document.querySelectorAll('.merge-pick:checked')].map(c => c.value);
+  if (ids.length < 2) { alert('합칠 그래프를 2개 이상 체크하세요.'); return; }
+  const sources = ids.map(id => {
+    const g = GRAPH_LIST.find(x => x.id === id);
+    return g ? {name: g.name, data: id === activeGraphId ? S : g.data} : null;
+  }).filter(Boolean);
+  let id = ($('#mergeName').value.trim() || '합친_그래프').normalize('NFKC').replace(/[^\p{L}\p{N}_-]+/gu, '_').replace(/^_+|_+$/g, '').slice(0, 70) || '합친_그래프';
+  if (GRAPH_LIST.some(g => g.id === id)) id += `_${Date.now().toString().slice(-6)}`;
+  if (!confirm(`그래프 ${sources.length}개를 합쳐 '${id.replaceAll('_', ' ')}'을(를) 새로 만들까요?\n원래 그래프는 그대로 남습니다.`)) return;
+  try {
+    if (activeGraphId) { clearTimeout(graphSaveTimer); await persistGraph(activeGraphId, S); }
+    const merged = mergeGraphData(sources.map(s => s.data));
+    await persistGraph(id, merged);
+    document.querySelectorAll('.merge-pick').forEach(c => c.checked = false);
+    setFstat(`그래프를 합쳤습니다: ${id.replaceAll('_', ' ')} (노드 ${merged.nodes.length}개, 화살표 ${merged.edges.length}개)`);
+  } catch (err) {
+    alert(`그래프 합치기 실패: ${err.message}`);
+  }
+}
+$('#btnMerge').onclick = mergeSelectedGraphs;
+$('#btnGraphs').onclick = () => { renderGraphLibrary(); $('#graphDlg').showModal(); };
+$('#btnGraphClose').onclick = () => $('#graphDlg').close();
 $('#btnSaveVersionInterval').onclick = applyVersionInterval;
 $('#btnCreateVersion').onclick = async () => {
-  const input = $('#versionSummary'), summary = input.value.trim();
-  if (!summary) { input.focus(); alert('변경 요약을 적어 주세요.'); return; }
-  if (await createVersion(summary, S, true)) { input.value = ''; renderVersions(); }
+  const input = $('#versionSummary');
+  const graphName = (GRAPH_LIST.find(g => g.id === activeGraphId)?.name || activeGraphId || '').replaceAll('_', ' ');
+  const auto = `${graphName ? `[${graphName}] ` : ''}수동 저장 · 노드 ${S.nodes.length}개, 화살표 ${S.edges.length}개 · ${new Date().toLocaleString()}`;
+  const summary = input.value.trim() || auto;
+  if (await createVersion(summary, S, true)) { input.value = ''; renderVersions(); setFstat('현재 상태를 저장했습니다.'); }
 };
+$('#versionList').addEventListener('change', e => {
+  if (e.target.id !== 'verPickAll') return;
+  document.querySelectorAll('.ver-pick').forEach(c => c.checked = e.target.checked);
+});
 $('#versionList').addEventListener('click', async e => {
+  if (e.target.closest('#btnDeleteSelectedVersions')) {
+    await deleteVersionsBulk([...document.querySelectorAll('.ver-pick:checked')].map(c => c.dataset.versionPick));
+    return;
+  }
   const open = e.target.closest('[data-version-open]'), restore = e.target.closest('[data-version-restore]'), remove = e.target.closest('[data-version-delete]');
   if (open) {
     const v = versions().find(x => x.id === open.dataset.versionOpen);
@@ -1028,23 +1193,60 @@ $('#btnSave').onclick = () => download('causal-editor.json', JSON.stringify(S, n
 
 $('#btnLoadExample').onclick = loadSampleGraph;
 
+async function importGraphFile(name, text) {
+  const o = JSON.parse(text);
+  if (!Array.isArray(o.nodes)) throw new Error('bad');
+  if (!await createVersion('JSON 불러오기 전 자동 백업')) throw new Error('현재 상태를 변경이력 폴더에 백업하지 못했습니다.');
+  let id = name.replace(/\.json$/i, '').normalize('NFKC').replace(/[^\p{L}\p{N}_-]+/gu, '_').replace(/^_+|_+$/g, '').slice(0, 70);
+  if (!id) id = `가져온_그래프_${Date.now()}`;
+  if (GRAPH_LIST.some(g => g.id === id)) id += `_${Date.now().toString().slice(-6)}`;
+  await applyGraph(o, id);
+  await createVersion('JSON 파일 불러옴');
+}
+
 $('#file').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
-  try {
-    const o = JSON.parse(await f.text());
-    if (!Array.isArray(o.nodes)) throw new Error('bad');
-    if (!await createVersion('JSON 불러오기 전 자동 백업')) throw new Error('현재 상태를 변경이력 폴더에 백업하지 못했습니다.');
-    let id = f.name.replace(/\.json$/i, '').normalize('NFKC').replace(/[^\p{L}\p{N}_-]+/gu, '_').replace(/^_+|_+$/g, '').slice(0, 70);
-    if (!id) id = `가져온_그래프_${Date.now()}`;
-    if (GRAPH_LIST.some(g => g.id === id)) id += `_${Date.now().toString().slice(-6)}`;
-    await applyGraph(o, id);
-    await createVersion('JSON 파일 불러옴');
-  } catch (err) {
-    alert(`JSON 불러오기 실패: ${err.message}`);
-  }
+  try { await importGraphFile(f.name, await f.text()); }
+  catch (err) { alert(`JSON 불러오기 실패: ${err.message}`); }
   e.target.value = '';
 });
 
+$('#btnPickProject').onclick = async () => {
+  const list = $('#pickList');
+  list.textContent = '불러오는 중…';
+  $('#pickDlg').showModal();
+  try {
+    const r = await fetch('/api/project-json');
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    list.textContent = '';
+    if (!d.files.length) list.textContent = 'JSON 파일이 없습니다.';
+    for (const rel of d.files) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = rel;
+      b.style.cssText = 'display:block;width:100%;text-align:left;margin-bottom:4px;word-break:break-all';
+      b.onclick = async () => {
+        try {
+          const rr = await fetch(`/api/project-json/read?path=${encodeURIComponent(rel)}`);
+          if (!rr.ok) throw new Error('파일을 읽지 못했습니다.');
+          const text = await rr.text();
+          $('#pickDlg').close();
+          await importGraphFile(rel.split('/').pop(), text);
+        } catch (err) { alert(`JSON 불러오기 실패: ${err.message}`); }
+      };
+      list.appendChild(b);
+    }
+  } catch (err) { list.textContent = `목록을 가져오지 못했습니다: ${err.message}`; }
+};
+$('#btnPickClose').onclick = () => $('#pickDlg').close();
+
+// 편집기 탭이 열려 있음을 서버에 알립니다. 탭을 닫으면 신호가 끊기고, 서버와 실행 창이 자동으로 꺼집니다.
+if (location.protocol === 'http:') {
+  const beat = () => fetch('/api/alive', {method: 'POST', keepalive: true}).catch(() => {});
+  beat();
+  setInterval(beat, 10000);
+}
 $('#btnHelp').onclick = () => $('#helpDlg').showModal();
 $('#btnHelpClose').onclick = () => $('#helpDlg').close();
 $('#btnAdd').onclick = () => addNode(60 + Math.random() * 300, 60 + Math.random() * 300);

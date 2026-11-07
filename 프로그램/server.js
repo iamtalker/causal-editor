@@ -7,6 +7,10 @@ const fs = require('fs');
 const path = require('path');
 
 const PORT = 8787;
+// 편집기 탭이 열려 있는 동안 10초마다 신호(alive)를 받습니다. 신호가 IDLE_MS 동안 없으면 탭이 닫힌 것으로 보고 서버를 끕니다.
+// 브라우저가 백그라운드 탭을 느리게 만들어도 끊기지 않도록 넉넉히 잡았습니다. (EDITOR_IDLE_MS는 시험용)
+const IDLE_MS = Number(process.env.EDITOR_IDLE_MS) || 90000;
+let lastSeen = Date.now() + IDLE_MS;   // 처음 페이지가 열릴 시간을 줍니다
 const APP_DIR = __dirname;
 const ROOT = path.resolve(APP_DIR, '..');
 const NODE_DIR = path.join(ROOT, '노드파일');
@@ -64,6 +68,44 @@ const server = http.createServer((req, res) => {
   }
 
   const graphMatch = req.url.match(/^\/api\/graphs\/([^/?]+)$/);
+  // 그래프 삭제: 폴더를 바로 지우지 않고 변경이력/삭제된_그래프로 옮겨 복구할 수 있게 합니다.
+  if (req.method === 'DELETE' && graphMatch) {
+    let id;
+    try { id = decodeURIComponent(graphMatch[1]); } catch { return sendJson(res, 400, {ok: false, error: '잘못된 그래프 폴더 이름입니다.'}); }
+    if (!GRAPH_ID.test(id)) return sendJson(res, 400, {ok: false, error: '잘못된 그래프 폴더 이름입니다.'});
+    const src = path.join(NODE_DIR, id);
+    if (!fs.existsSync(path.join(src, `${id}.json`))) return sendJson(res, 404, {ok: false, error: '그래프 폴더를 찾지 못했습니다.'});
+    try {
+      const trashDir = path.join(HISTORY_DIR, '삭제된_그래프');
+      const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+      fs.mkdirSync(trashDir, {recursive: true});
+      const dest = path.join(trashDir, `${id}_${stamp}`);
+      fs.renameSync(src, dest);
+      return sendJson(res, 200, {ok: true, movedTo: path.relative(ROOT, dest)});
+    } catch (err) { return sendJson(res, 500, {ok: false, error: err.message}); }
+  }
+
+  // 그래프 이름 바꾸기: 폴더와 그래프 JSON 파일 이름을 함께 바꿉니다.
+  if (req.method === 'PATCH' && graphMatch) {
+    let id;
+    try { id = decodeURIComponent(graphMatch[1]); } catch { return sendJson(res, 400, {ok: false, error: '잘못된 그래프 폴더 이름입니다.'}); }
+    if (!GRAPH_ID.test(id)) return sendJson(res, 400, {ok: false, error: '잘못된 그래프 폴더 이름입니다.'});
+    readBody(req).then(body => {
+      const {name} = JSON.parse(body);
+      const to = String(name || '').normalize('NFKC').replace(/[^\p{L}\p{N}_-]+/gu, '_').replace(/^_+|_+$/g, '').slice(0, 70);
+      if (!GRAPH_ID.test(to)) throw new Error('이름에는 한글, 영문, 숫자, _, - 만 쓸 수 있습니다.');
+      const src = path.join(NODE_DIR, id), dst = path.join(NODE_DIR, to);
+      if (!fs.existsSync(path.join(src, `${id}.json`))) return sendJson(res, 404, {ok: false, error: '그래프 폴더를 찾지 못했습니다.'});
+      if (to !== id) {
+        if (fs.existsSync(dst)) return sendJson(res, 409, {ok: false, error: '같은 이름의 그래프가 이미 있습니다.'});
+        fs.renameSync(src, dst);
+        fs.renameSync(path.join(dst, `${id}.json`), path.join(dst, `${to}.json`));
+      }
+      sendJson(res, 200, {ok: true, id: to, name: to});
+    }).catch(err => sendJson(res, 400, {ok: false, error: err.message}));
+    return;
+  }
+
   if (req.method === 'POST' && graphMatch) {
     let id;
     try { id = decodeURIComponent(graphMatch[1]); } catch { return sendJson(res, 400, {ok: false, error: '잘못된 그래프 폴더 이름입니다.'}); }
@@ -172,6 +214,40 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 편집기 탭이 살아 있다는 신호
+  if (req.method === 'POST' && req.url === '/api/alive') {
+    lastSeen = Date.now();
+    return sendJson(res, 200, {ok: true});
+  }
+
+  // 프로젝트 폴더 안의 JSON 파일 목록 (불러오기 창에서 사용)
+  if (req.method === 'GET' && req.url === '/api/project-json') {
+    const SKIP = new Set(['node_modules', '.venv', '변경이력']);   // 변경이력은 버전 스냅샷이라 목록에서 제외
+    const found = [];
+    try {
+      (function walk(dir, depth) {
+        if (depth > 3 || found.length >= 300) return;
+        for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+          if (entry.name.startsWith('.') || SKIP.has(entry.name)) continue;
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory()) walk(full, depth + 1);
+          else if (entry.isFile() && /\.json$/i.test(entry.name)) found.push(path.relative(ROOT, full).split(path.sep).join('/'));
+        }
+      })(ROOT, 0);
+      return sendJson(res, 200, {ok: true, files: found.sort()});
+    } catch (err) { return sendJson(res, 500, {ok: false, error: err.message}); }
+  }
+
+  // 프로젝트 폴더 안의 JSON 파일 하나 읽기 (폴더 밖 경로는 거부)
+  if (req.method === 'GET' && req.url.startsWith('/api/project-json/read?')) {
+    const rel = new URL(req.url, 'http://localhost').searchParams.get('path') || '';
+    const full = path.resolve(ROOT, rel);
+    if (!full.startsWith(ROOT + path.sep) || !/\.json$/i.test(full) || !fs.existsSync(full)) return sendJson(res, 404, {ok: false, error: '파일을 찾지 못했습니다.'});
+    res.writeHead(200, {'Content-Type': 'application/json; charset=utf-8'});
+    fs.createReadStream(full).pipe(res);
+    return;
+  }
+
   res.writeHead(404);
   res.end('Not found');
 });
@@ -179,6 +255,13 @@ const server = http.createServer((req, res) => {
 // 이 PC에서만 접속 가능하도록 127.0.0.1에만 엽니다.
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`인과 편집기 실행 중: http://localhost:${PORT}`);
+  console.log('편집기 탭을 닫으면 잠시 뒤 이 창도 자동으로 꺼집니다.');
+  setInterval(() => {
+    if (Date.now() - lastSeen > IDLE_MS) {
+      console.log('편집기 탭이 닫혀 서버를 끕니다.');
+      process.exit(0);
+    }
+  }, 5000);
   console.log(`프로그램 폴더: ${APP_DIR}`);
   console.log(`노드 파일 폴더: ${NODE_DIR}`);
   console.log(`변경 이력 폴더: ${HISTORY_DIR}`);
