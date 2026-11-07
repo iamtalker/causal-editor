@@ -33,6 +33,12 @@
   #tip{position:sticky;top:0;z-index:1;background:#fffbe6;border-bottom:1px solid #f0e0a0;padding:6px 12px;font-size:13px;color:#554}
   aside{width:300px;flex:0 0 300px;border-left:1px solid #e1e5eb;background:#fff;padding:18px 16px;overflow:auto;box-sizing:border-box}
   aside[hidden]{display:none}
+  #graphLibrary{margin:-4px -4px 16px;padding:0 4px 14px;border-bottom:1px solid #e5e7eb}
+  #graphLibrary h2{font-size:14px;margin:0 0 8px}
+  #graphList{display:grid;gap:6px;max-height:230px;overflow:auto}
+  .graph-choice{width:100%;padding:8px 9px;text-align:left;white-space:normal;font-size:12px;line-height:1.45}
+  .graph-choice.active{border-color:#2563eb;background:#eff6ff;color:#1d4ed8}
+  .graph-choice small{display:block;color:#667085;font-size:11px;margin-top:2px}
   #help{color:#667085;font-size:13px;line-height:1.75}
   aside label{display:block;font-size:12px;color:#555;margin-top:10px}
   aside input,aside textarea,aside select{width:100%;box-sizing:border-box;padding:6px;border:1px solid #ccc;border-radius:6px;font:inherit;margin-top:3px}
@@ -76,7 +82,12 @@
 <main>
   <div id="stage"><div id="tip"></div><svg id="canvas" width="2400" height="1600"></svg></div>
   <aside>
+    <section id="graphLibrary" aria-label="그래프 목록">
+      <h2>그래프 목록</h2>
+      <div id="graphList" class="hint">저장된 그래프를 불러오는 중…</div>
+    </section>
     <div id="help" class="hint">
+      오른쪽 그래프 목록에서 예시나 저장된 그래프를 선택해 전환할 수 있습니다.<br><br>
       노드나 화살표를 클릭하면 여기에서 내용을 편집할 수 있습니다.<br>
       사용법은 상단의 <b>도움말</b> 버튼을 누르세요.
     </div>
@@ -182,6 +193,7 @@ const KEY = 'causal-editor-v3';
 const VERSION_KEY = 'causal-editor-versions-v1';
 const VERSION_INTERVAL_KEY = 'causal-editor-version-interval-v1';
 const SIDEBAR_KEY = 'causal-editor-sidebar-hidden-v1';
+const GRAPH_ACTIVE_KEY = 'causal-editor-active-graph-v1';
 const RECT = {w: 200, h: 110}, CIRCLE = {w: 130, h: 130};
 const DEFAULT_SETTINGS = {shape:'rect', nodeColor:'#ffffff', bgColor:'#fafafa', lineStyle:'curve', lineColor:'#9ca3af', highlightColor:'#2563eb', selectionColor:'#ea580c', canvasPadding:120};
 const NODE_FIELDS = [['f_title','title'],['f_now','now'],['f_memo','memo']];
@@ -203,6 +215,7 @@ const svg = $('#canvas');
 
 let S, sel = {type: null, id: null}, drag = null, pan = null, pendingConnectionSource = null;
 let focusMode = false, focusNodeId = null;
+let GRAPH_LIST = [], activeGraphId = '', graphSaveTimer = null;
 let zoom = 1, lastCW = 800, lastCH = 600, viewMinX = 0, viewMinY = 0;   // 확대율과 뷰박스(저장하지 않음)
 let versionTimer = null, versionDueAt = 0, versionIntervalMs = 60 * 60 * 1000;
 let lastVersionSnapshot = '', VERSION_LIST = [];
@@ -218,7 +231,24 @@ function ensureSettings() { S.settings = Object.assign({}, DEFAULT_SETTINGS, S.s
 function load() { try { const v = localStorage.getItem(KEY); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  clearTimeout(graphSaveTimer);
+  if (activeGraphId && location.protocol !== 'file:') {
+    const snapshot = JSON.parse(JSON.stringify(S)), id = activeGraphId;
+    graphSaveTimer = setTimeout(() => persistGraph(id, snapshot), 250);
+  }
   scheduleMd();
+}
+async function persistGraph(id, data) {
+  try {
+    const r = await fetch(`/api/graphs/${encodeURIComponent(id)}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || '그래프 JSON 저장 실패');
+    const item = {id:j.id, name:j.name, data:JSON.parse(JSON.stringify(data))};
+    const i = GRAPH_LIST.findIndex(g => g.id === id);
+    if (i < 0) GRAPH_LIST.unshift(item); else GRAPH_LIST[i] = item;
+    renderGraphLibrary();
+    return true;
+  } catch (err) { setFstat(`그래프 JSON 저장 실패: ${err.message}`); return false; }
 }
 function versions() { return VERSION_LIST; }
 async function postVersion(item) {
@@ -254,6 +284,7 @@ async function createVersion(summary, data = S, force = false) {
     const item = await postVersion({summary:summary.trim(), data:snapshot});
     VERSION_LIST.unshift(item);
     lastVersionSnapshot = JSON.stringify(snapshot);
+    renderGraphLibrary();
     if ($('#versionDlg').open) renderVersions();
     return true;
   } catch (e) { setFstat(`변경 이력 저장 실패: ${e.message}`); return false; }
@@ -310,6 +341,122 @@ function renderVersions() {
   const list = versions(), box = $('#versionList');
   if (!list.length) { box.innerHTML = '<p>아직 저장된 버전이 없습니다.</p>'; return; }
   box.innerHTML = list.map(v => `<div style="border-top:1px solid #ddd;padding:10px 0"><b>${esc(new Date(v.at).toLocaleString())}</b><br>${esc(v.summary)}<br><span style="font-size:12px;color:#777">노드 ${v.data?.nodes?.length || 0}개 · 화살표 ${v.data?.edges?.length || 0}개</span><br><button data-version-open="${esc(v.id)}">JSON 내려받기</button> <button data-version-restore="${esc(v.id)}">이 버전 복원</button> <button data-version-delete="${esc(v.id)}">삭제</button></div>`).join('');
+}
+
+function sameGraph(a, b) {
+  return JSON.stringify(a?.nodes || []) === JSON.stringify(b?.nodes || []) && JSON.stringify(a?.edges || []) === JSON.stringify(b?.edges || []);
+}
+
+async function backUpBrowserGraphIfNeeded() {
+  if (!S.nodes.length && !S.edges.length) return true;
+  try {
+    const r = await fetch('/api/versions'), j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || '변경 이력을 읽지 못했습니다.');
+    if ((j.versions || []).some(v => sameGraph(v.data, S))) return true;
+    const saved = await postVersion({summary:'폴더 그래프 전환 전 브라우저 상태 백업', data:JSON.parse(JSON.stringify(S))});
+    VERSION_LIST.unshift(saved); renderVersions();
+    return true;
+  } catch (err) {
+    setFstat(`브라우저 그래프 백업 실패: ${err.message}`);
+    return false;
+  }
+}
+
+async function loadGraphFolders() {
+  const r = await fetch('/api/graphs'), j = await r.json();
+  if (!r.ok || !j.ok) throw new Error(j.error || '그래프 폴더를 읽지 못했습니다.');
+  GRAPH_LIST = j.graphs || [];
+  const remembered = localStorage.getItem(GRAPH_ACTIVE_KEY);
+  const rememberedGraph = GRAPH_LIST.find(g => g.id === remembered);
+  if (rememberedGraph) {
+    activeGraphId = remembered;
+    if (!sameGraph(rememberedGraph.data, S)) {
+      if (!await backUpBrowserGraphIfNeeded()) throw new Error('브라우저 데이터 백업에 실패해 폴더 그래프를 불러오지 않았습니다.');
+      await applyGraph(rememberedGraph.data, rememberedGraph.id);
+    }
+  } else {
+    const match = GRAPH_LIST.find(g => sameGraph(g.data, S));
+    if (match) activeGraphId = match.id;
+    else if (!remembered && !S.nodes.length && !S.edges.length && GRAPH_LIST.some(g => g.id === '내_계획' && g.data.nodes.length)) {
+      const personal = GRAPH_LIST.find(g => g.id === '내_계획');
+      await applyGraph(personal.data, personal.id);
+    }
+    else {
+      // 브라우저의 임시 상태와 폴더 JSON이 다르면 어느 쪽도 덮어쓰지 않고 임시 그래프로 보존합니다.
+      activeGraphId = `복구_그래프_${Date.now()}`;
+      await persistGraph(activeGraphId, S);
+    }
+    localStorage.setItem(GRAPH_ACTIVE_KEY, activeGraphId);
+  }
+  renderGraphLibrary();
+  syncNodeFiles();
+}
+
+function renderGraphLibrary() {
+  const box = $('#graphList');
+  if (!box) return;
+  box.replaceChildren();
+  if (!GRAPH_LIST.length) { box.textContent = '그래프 JSON이 들어 있는 폴더가 없습니다.'; return; }
+  for (const graph of GRAPH_LIST) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'graph-choice';
+    if (graph.id === activeGraphId) button.classList.add('active');
+    button.textContent = graph.name.replaceAll('_', ' ');
+    button.addEventListener('click', () => loadGraphFolder(graph.id));
+    box.appendChild(button);
+  }
+}
+
+async function prepareGraphSwitch() {
+  if (!confirm('현재 그래프를 변경 이력에 보관한 뒤 선택한 그래프로 전환할까요?')) return false;
+  if (!await createVersion('그래프 전환 전 자동 백업')) {
+    alert('현재 그래프를 변경이력에 백업하지 못해 전환을 취소했습니다.');
+    return false;
+  }
+  return true;
+}
+
+async function applyGraph(data, graphId = activeGraphId) {
+  S = JSON.parse(JSON.stringify(data));
+  S.edges = S.edges || []; S.nextId = S.nextId || 100;
+  ensureSettings();
+  activeGraphId = graphId;
+  try { localStorage.setItem(GRAPH_ACTIVE_KEY, activeGraphId); } catch (e) {}
+  focusMode = false; focusNodeId = null;
+  $('#btnFocus').textContent = '포커스 모드';
+  $('#btnFocus').setAttribute('aria-pressed', 'false');
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  scheduleMd();
+  if (activeGraphId) await persistGraph(activeGraphId, S);
+  lastVersionSnapshot = JSON.stringify(S);
+  select(null, null); renderSettings(); fitView(); renderGraphLibrary();
+}
+
+async function loadGraphFolder(id) {
+  const graph = GRAPH_LIST.find(g => g.id === id);
+  if (!graph || id === activeGraphId) return;
+  if (!await prepareGraphSwitch()) return;
+  await applyGraph(graph.data, graph.id);
+  setFstat(`그래프를 불러왔습니다: ${graph.name.replaceAll('_', ' ')}`);
+}
+
+async function loadSampleGraph() {
+  if (!await prepareGraphSwitch()) return;
+  try {
+    const r = await fetch('/api/sample'), data = await r.json();
+    if (!r.ok || !Array.isArray(data.nodes)) throw new Error(data.error || '예시 파일을 읽지 못했습니다.');
+    const id = '부자되기_예시';
+    await applyGraph(data, id);
+    await createVersion('부자 되기 예시 다시 불러옴');
+    setFstat('저장소의 원본 예시를 불러왔습니다. 예시 파일 자체는 수정되지 않았습니다.');
+  } catch (err) { alert(`예시 불러오기 실패: ${err.message}`); }
+}
+
+async function loadGraphVersion(id) {
+  const v = VERSION_LIST.find(item => item.id === id);
+  if (!v || !await prepareGraphSwitch()) return;
+  await applyGraph(v.data);
+  setFstat(`그래프를 불러왔습니다: ${v.summary || new Date(v.at).toLocaleString()}`);
 }
 
 const node = id => S.nodes.find(n => n.id === id);
@@ -586,7 +733,7 @@ async function syncNodeFiles() {
     const r = await fetch('/api/nodes', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({files})
+      body: JSON.stringify({graphId:activeGraphId, files})
     });
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
@@ -860,7 +1007,7 @@ $('#versionList').addEventListener('click', async e => {
     const v = versions().find(x => x.id === restore.dataset.versionRestore);
     if (!v || !confirm(`“${v.summary}” 버전으로 그래프 전체를 복원할까요? 현재 상태는 복원 전 버전으로 자동 보관됩니다.`)) return;
     if (!await createVersion('복원 전 자동 백업')) { alert('현재 상태를 변경이력 폴더에 백업하지 못해 복원을 취소했습니다.'); return; }
-    S = JSON.parse(JSON.stringify(v.data)); ensureSettings(); save(); select(null, null); render(); renderPanel(); renderSettings(); renderVersions();
+    await applyGraph(v.data); renderVersions();
   }
   if (remove) {
     const v = versions().find(x => x.id === remove.dataset.versionDelete);
@@ -872,28 +1019,14 @@ $('#versionList').addEventListener('click', async e => {
       const wasLatest = VERSION_LIST[0]?.id === v.id;
       VERSION_LIST = VERSION_LIST.filter(item => item.id !== v.id);
       if (wasLatest) lastVersionSnapshot = JSON.stringify(VERSION_LIST[0]?.data ?? S);
-      renderVersions();
+      renderVersions(); renderGraphLibrary();
     } catch (err) { setFstat(`버전 삭제 실패: ${err.message}`); }
   }
 });
 $('#btnSetClose').onclick = () => $('#setDlg').close();
 $('#btnSave').onclick = () => download('causal-editor.json', JSON.stringify(S, null, 2), 'application/json');
 
-$('#btnLoadExample').onclick = async () => {
-  if (!confirm('현재 그래프 대신 “부자 되기” 예시를 불러올까요? 현재 그래프는 변경이력에 먼저 백업됩니다.')) return;
-  try {
-    const r = await fetch('/api/sample');
-    const o = await r.json();
-    if (!r.ok || !Array.isArray(o.nodes)) throw new Error(o.error || '예시 파일을 읽지 못했습니다.');
-    if (!await createVersion('예시 불러오기 전 자동 백업')) throw new Error('현재 그래프를 변경이력에 백업하지 못했습니다.');
-    S = o; S.edges = S.edges || []; S.nextId = S.nextId || 100;
-    ensureSettings(); save(); await createVersion('부자 되기 예시 불러옴');
-    focusMode = false; focusNodeId = null;
-    $('#btnFocus').textContent = '포커스 모드'; $('#btnFocus').setAttribute('aria-pressed', 'false');
-    select(null, null); renderSettings(); render(); renderPanel(); fitView();
-    $('#setDlg').close();
-  } catch (err) { alert(`예시 불러오기 실패: ${err.message}`); }
-};
+$('#btnLoadExample').onclick = loadSampleGraph;
 
 $('#file').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
@@ -901,9 +1034,11 @@ $('#file').addEventListener('change', async e => {
     const o = JSON.parse(await f.text());
     if (!Array.isArray(o.nodes)) throw new Error('bad');
     if (!await createVersion('JSON 불러오기 전 자동 백업')) throw new Error('현재 상태를 변경이력 폴더에 백업하지 못했습니다.');
-    S = o; S.edges = S.edges || []; S.nextId = S.nextId || 100;
-    ensureSettings();
-    save(); await createVersion('JSON 파일 불러옴'); select(null, null); renderSettings(); render(); renderPanel();
+    let id = f.name.replace(/\.json$/i, '').normalize('NFKC').replace(/[^\p{L}\p{N}_-]+/gu, '_').replace(/^_+|_+$/g, '').slice(0, 70);
+    if (!id) id = `가져온_그래프_${Date.now()}`;
+    if (GRAPH_LIST.some(g => g.id === id)) id += `_${Date.now().toString().slice(-6)}`;
+    await applyGraph(o, id);
+    await createVersion('JSON 파일 불러옴');
   } catch (err) {
     alert(`JSON 불러오기 실패: ${err.message}`);
   }
@@ -918,7 +1053,7 @@ $('#btnOpenMd').onclick = async () => {
   const n = node(sel.id); if (!n) return;
   if (location.protocol === 'file:') { setFstat('서버 없이 열렸습니다. 실행.bat으로 연 페이지에서 눌러 주세요.'); return; }
   try {
-    const r = await fetch('/api/open', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: fileName(n)})});
+    const r = await fetch('/api/open', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({graphId:activeGraphId, name: fileName(n)})});
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     setFstat(`${fileName(n)} 을 열었습니다.`);
@@ -931,7 +1066,12 @@ $('#btnReset').onclick = async () => {
   if (!confirm('모든 노드와 화살표를 지우고 처음부터 시작할까요? (설정은 유지됩니다)')) return;
   if (!await createVersion('초기화 전 자동 백업')) { alert('현재 상태를 변경이력 폴더에 백업하지 못해 초기화를 취소했습니다.'); return; }
   const keep = S.settings;
-  S = initial(); S.settings = keep; save(); await createVersion('그래프 초기화'); select(null, null);
+  S = initial(); S.settings = keep;
+  activeGraphId = `새_그래프_${Date.now()}`;
+  try { localStorage.setItem(GRAPH_ACTIVE_KEY, activeGraphId); } catch (e) {}
+  await applyGraph(S, activeGraphId);
+  await createVersion('그래프 초기화');
+  setFstat('새 빈 그래프를 만들었습니다. 이전 그래프는 오른쪽 그래프 목록에서 다시 열 수 있습니다.');
 };
 
 document.addEventListener('keydown', e => {
@@ -953,8 +1093,8 @@ setSidebarVisible(!sidebarHiddenAtLoad);
 fillVersionIntervalInputs();
 buildPresets();
 render(); renderPanel();
-syncNodeFiles();
 loadVersions().then(() => { renderVersions(); scheduleVersionCheck(true); }).catch(err => setFstat(`변경 이력 폴더에 접근할 수 없습니다: ${err.message}`));
+loadGraphFolders().catch(err => setFstat(`그래프 폴더를 읽지 못했습니다: ${err.message}`));
 </script>
 </body>
 </html>
