@@ -6,17 +6,32 @@
 <title>인과 편집기</title>
 <style>
   body{margin:0;font-family:system-ui,"Malgun Gothic",sans-serif;background:#f4f5f7;color:#222;height:100vh;display:flex;flex-direction:column}
-  header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;background:#fff;border-bottom:1px solid #ddd}
-  header h1{font-size:18px;margin:0 8px 0 0}
-  button,.btn{padding:6px 10px;border:1px solid #bbb;border-radius:6px;background:#fff;cursor:pointer;font:inherit;font-size:13px}
-  button:hover,.btn:hover{background:#f0f0f0}
+  header{position:relative;z-index:2;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:9px 14px;background:#fff;border-bottom:1px solid #dce1e8;box-shadow:0 1px 3px #1822300a}
+  header h1{font-size:17px;letter-spacing:-.3px;margin:0 4px 0 0;white-space:nowrap}
+  .toolbar-group{display:flex;gap:6px;align-items:center;padding-right:12px;border-right:1px solid #e5e7eb}
+  .toolbar-group:last-of-type{border-right:0;padding-right:0}
+  button,.btn{padding:6px 10px;border:1px solid #cbd2dc;border-radius:7px;background:#fff;color:#263244;cursor:pointer;font:inherit;font-size:13px;line-height:1.35;white-space:nowrap;transition:background .12s,border-color .12s}
+  button:hover,.btn:hover{background:#f4f7fb;border-color:#aab5c4}
+  button:focus-visible,.btn:focus-visible,select:focus-visible{outline:2px solid #93c5fd;outline-offset:1px}
+  #btnVersions{border-color:#bfd3f7;background:#f5f8ff;color:#1d4ed8}
+  #btnReset{color:#6b7280}
+  #layoutMode{max-width:170px;padding:6px 8px;border:1px solid #cbd2dc;border-radius:7px;background:white;font:inherit;font-size:13px;color:#263244}
+  #fstat{display:block;min-width:0;max-width:260px;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   button:disabled{opacity:.4;cursor:not-allowed}
   .btn input{display:none}
   main{flex:1;display:flex;min-height:0}
-  #stage{flex:1;overflow:auto;background:#fafafa}
+  #stage{flex:1;overflow:auto;background:#fafafa;scrollbar-color:#aab2bd #edf0f4;cursor:grab}
+  #stage.is-panning{cursor:grabbing;user-select:none}
+  #canvasMenu{position:fixed;z-index:30;min-width:190px;padding:5px;border:1px solid #d4d9e1;border-radius:9px;background:#fff;box-shadow:0 8px 24px #18223026}
+  #canvasMenu[hidden]{display:none}
+  #canvasMenu button{display:block;width:100%;padding:8px 10px;border:0;text-align:left;background:transparent}
+  #canvasMenu button:hover{background:#f1f5f9}
+  #canvasMenu button.danger{color:#b42318}
   #tip[hidden]{display:none}
   #tip{position:sticky;top:0;z-index:1;background:#fffbe6;border-bottom:1px solid #f0e0a0;padding:6px 12px;font-size:13px;color:#554}
-  aside{width:320px;border-left:1px solid #ddd;background:#fff;padding:14px;overflow:auto;box-sizing:border-box}
+  aside{width:300px;flex:0 0 300px;border-left:1px solid #e1e5eb;background:#fff;padding:18px 16px;overflow:auto;box-sizing:border-box}
+  aside[hidden]{display:none}
+  #help{color:#667085;font-size:13px;line-height:1.75}
   aside label{display:block;font-size:12px;color:#555;margin-top:10px}
   aside input,aside textarea,aside select{width:100%;box-sizing:border-box;padding:6px;border:1px solid #ccc;border-radius:6px;font:inherit;margin-top:3px}
   aside textarea{min-height:52px;resize:vertical}
@@ -33,26 +48,26 @@
   .crow input{width:110px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:13px}
   .sw{display:inline-block;width:26px;height:26px;border-radius:4px;border:1px solid #999}
   .presets{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+  .interval-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
+  .interval-row label{display:block;font-size:12px;color:#555}
+  .interval-row input{box-sizing:border-box;width:72px;padding:6px;border:1px solid #ccc;border-radius:6px;font:inherit}
   .pc{width:22px;height:22px;padding:0;margin:0;border:1px solid #999;border-radius:4px;cursor:pointer}
   dialog .btn{display:inline-block;margin-top:14px}
   .hint{font-size:13px;color:#555;line-height:1.8}
   .muted{font-size:12px;color:#888;margin-bottom:4px}
-  @media (max-width:800px){main{flex-direction:column}aside{width:auto;border-left:0;border-top:1px solid #ddd;max-height:40vh}}
+  @media (max-width:1000px){header{gap:7px}.toolbar-group{padding-right:8px}.toolbar-group button{padding:6px 8px}#fstat{max-width:180px}}
+  @media (max-width:800px){main{flex-direction:column}aside{width:auto;flex:0 0 auto;border-left:0;border-top:1px solid #ddd;max-height:35vh}#fstat{margin-left:0;max-width:100%}}
 </style>
 </head>
 <body>
 <header>
-  <h1>인과 편집기</h1>
-  <button id="btnHelp">도움말</button>
-  <button id="btnAdd">노드 추가</button>
-  <select id="layoutMode" title="자동 정렬 방식">
-    <option value="layered">계층 (시작→종료)</option><option value="circle">원형</option><option value="grid">격자</option>
-  </select>
-  <button id="btnLayout">자동 정렬</button>
-  <button id="btnFit">화면에 맞추기</button>
-  <button id="btnZoom100">100%</button>
-  <button id="btnSettings">설정</button>
-  <button id="btnReset">초기화</button>
+  <div class="toolbar-group"><h1>인과 편집기</h1><button id="btnHelp">도움말</button></div>
+  <div class="toolbar-group"><button id="btnAdd">노드 추가</button>
+    <select id="layoutMode" title="자동 정렬 방식">
+      <option value="layered">계층 · 좌→우</option><option value="pyramid" title="인과 단계별 위에서 아래로">피라미드</option><option value="diamond" title="시작은 위, 종료는 아래에 두고 가운데를 넓힘">다이아몬드</option><option value="circle">원형</option><option value="grid">격자</option>
+    </select><button id="btnLayout">자동 정렬</button></div>
+  <div class="toolbar-group"><button id="btnFit">화면에 맞추기</button><button id="btnZoom100">100%</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
+  <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReset">초기화</button></div>
   <span id="fstat" class="muted"></span>
 </header>
 <main>
@@ -85,20 +100,41 @@
   </aside>
 </main>
 
+<div id="canvasMenu" role="menu" aria-label="캔버스 메뉴" hidden></div>
+
 <dialog id="helpDlg">
   <h2 style="margin-top:0;font-size:17px">도움말</h2>
   <ul class="hint" style="padding-left:18px;margin:0">
     <li>빈 곳 더블클릭: 노드 추가 (노드 = 하나의 상태)</li>
+    <li>캔버스에서 마우스 오른쪽 버튼: 대상에 맞는 편집 메뉴</li>
+    <li>빈 캔버스를 누른 채 드래그: 화면 이동</li>
     <li>노드 드래그: 위치 이동</li>
     <li>노드 선택 후 Shift+클릭 다른 노드: 화살표 연결 (원인 → 결과)</li>
     <li>화살표를 클릭하면 그 인과의 설명과 메모를 적을 수 있습니다</li>
     <li>노드·화살표 선택 후 Delete: 삭제</li>
     <li>노드 오른쪽 위 체크박스: 체크하면 그 노드의 테두리가 강조 색으로 바뀝니다</li>
     <li>양 끝 노드가 모두 체크된 화살표는 강조 색으로 표시됩니다</li>
-    <li>노드 편집 칸의 '역할'에서 시작·종료 노드를 정하면, 자동 정렬(계층)의 기준이 됩니다</li>
+    <li>노드 편집 칸에서 시작·종료 노드를 정하면 계층, 피라미드, 다이아몬드 정렬의 기준이 됩니다</li>
     <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양과 색, 체크 강조 색을 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
   </ul>
   <button id="btnHelpClose">닫기</button>
+</dialog>
+
+<dialog id="versionDlg">
+  <h2 style="margin-top:0;font-size:17px">그래프 버전 기록</h2>
+  <p class="hint">앱을 열거나 주기를 적용한 때부터 설정한 간격으로 그래프를 확인합니다. 마지막 버전과 달라졌을 때만 전체 스냅샷을 변경이력 폴더에 저장합니다. 이전 버전을 JSON으로 내려받거나 복원할 수 있습니다.</p>
+  <div class="interval-row" aria-label="버전 기록 주기">
+    <label>일<input id="v_days" type="number" min="0" max="3650" step="1"></label>
+    <label>시간<input id="v_hours" type="number" min="0" max="23" step="1"></label>
+    <label>분<input id="v_minutes" type="number" min="0" max="59" step="1"></label>
+    <label>초<input id="v_seconds" type="number" min="0" max="59" step="1"></label>
+  </div>
+  <div id="versionIntervalStatus" class="muted"></div>
+  <button id="btnSaveVersionInterval">저장 주기 적용</button>
+  <label>수동 버전 요약<input id="versionSummary" maxlength="160" placeholder="예: 실행 결과를 반영해 다음 단계를 수정"></label>
+  <button id="btnCreateVersion">현재 상태를 설명과 함께 저장</button>
+  <div id="versionList" class="hint" style="margin-top:16px;max-height:45vh;overflow:auto"></div>
+  <button id="btnVersionClose">닫기</button>
 </dialog>
 
 <dialog id="setDlg">
@@ -131,6 +167,9 @@
 
 <script>
 const KEY = 'causal-editor-v3';
+const VERSION_KEY = 'causal-editor-versions-v1';
+const VERSION_INTERVAL_KEY = 'causal-editor-version-interval-v1';
+const SIDEBAR_KEY = 'causal-editor-sidebar-hidden-v1';
 const RECT = {w: 200, h: 110}, CIRCLE = {w: 130, h: 130};
 const DEFAULT_SETTINGS = {shape:'rect', nodeColor:'#ffffff', bgColor:'#fafafa', lineStyle:'curve', lineColor:'#9ca3af', highlightColor:'#2563eb'};
 const NODE_FIELDS = [['f_title','title'],['f_now','now'],['f_memo','memo']];
@@ -149,8 +188,10 @@ const trunc = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); retur
 const today = () => new Date().toISOString().slice(0, 10);
 const svg = $('#canvas');
 
-let S, sel = {type: null, id: null}, drag = null;
+let S, sel = {type: null, id: null}, drag = null, pan = null, pendingConnectionSource = null;
 let zoom = 1, lastCW = 800, lastCH = 600;   // 화면 확대/축소 비율(저장하지 않음), 캔버스 크기
+let versionTimer = null, versionDueAt = 0, versionIntervalMs = 60 * 60 * 1000;
+let lastVersionSnapshot = '', VERSION_LIST = [];
 
 /* ---------- 데이터 ----------
    노드 = 하나의 상태 (제목, 현재, 메모, 위치, 체크)
@@ -161,7 +202,101 @@ function initial() {
 }
 function ensureSettings() { S.settings = Object.assign({}, DEFAULT_SETTINGS, S.settings || {}); }
 function load() { try { const v = localStorage.getItem(KEY); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} scheduleMd(); }
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  scheduleMd();
+}
+function versions() { return VERSION_LIST; }
+async function postVersion(item) {
+  const r = await fetch('/api/versions', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(item)});
+  const j = await r.json();
+  if (!r.ok || !j.ok) throw new Error(j.error || '버전 파일 저장 실패');
+  return j.version;
+}
+async function loadVersions() {
+  const r = await fetch('/api/versions');
+  const j = await r.json();
+  if (!r.ok || !j.ok) throw new Error(j.error || '변경 이력을 읽지 못했습니다.');
+  VERSION_LIST = j.versions;
+  // 이전 브라우저 로컬 저장소에 남아 있는 버전을 파일로 한 번 옮깁니다.
+  let legacy = [];
+  try { legacy = JSON.parse(localStorage.getItem(VERSION_KEY) || '[]'); } catch (e) {}
+  if (Array.isArray(legacy) && legacy.length) {
+    for (const v of [...legacy].reverse()) {
+      if (!v?.data || VERSION_LIST.some(existing => JSON.stringify(existing.data) === JSON.stringify(v.data))) continue;
+      const migrated = await postVersion({summary:v.summary || '이전 브라우저 버전', data:v.data});
+      VERSION_LIST.unshift(migrated);
+    }
+    localStorage.removeItem(VERSION_KEY);
+    const refreshed = await fetch('/api/versions');
+    VERSION_LIST = (await refreshed.json()).versions || [];
+  }
+  lastVersionSnapshot = JSON.stringify(VERSION_LIST[0]?.data ?? S);
+}
+async function createVersion(summary, data = S, force = false) {
+  const snapshot = JSON.parse(JSON.stringify(data));
+  if (!force && VERSION_LIST.length && JSON.stringify(VERSION_LIST[0].data) === JSON.stringify(snapshot)) return true;
+  try {
+    const item = await postVersion({summary:summary.trim(), data:snapshot});
+    VERSION_LIST.unshift(item);
+    lastVersionSnapshot = JSON.stringify(snapshot);
+    if ($('#versionDlg').open) renderVersions();
+    return true;
+  } catch (e) { setFstat(`변경 이력 저장 실패: ${e.message}`); return false; }
+}
+function formatVersionInterval(ms) {
+  let seconds = Math.floor(ms / 1000);
+  const days = Math.floor(seconds / 86400); seconds %= 86400;
+  const hours = Math.floor(seconds / 3600); seconds %= 3600;
+  const minutes = Math.floor(seconds / 60); seconds %= 60;
+  return `${days}일 ${hours}시간 ${minutes}분 ${seconds}초`;
+}
+function fillVersionIntervalInputs() {
+  let parts;
+  try { parts = JSON.parse(localStorage.getItem(VERSION_INTERVAL_KEY) || 'null'); } catch (e) {}
+  const ms = Number(parts?.ms);
+  versionIntervalMs = Number.isFinite(ms) && ms >= 1000 ? ms : 60 * 60 * 1000;
+  let left = Math.floor(versionIntervalMs / 1000);
+  $('#v_days').value = Math.floor(left / 86400); left %= 86400;
+  $('#v_hours').value = Math.floor(left / 3600); left %= 3600;
+  $('#v_minutes').value = Math.floor(left / 60); left %= 60;
+  $('#v_seconds').value = left;
+  $('#versionIntervalStatus').textContent = `저장 주기: ${formatVersionInterval(versionIntervalMs)} · 변경이 있을 때만 기록`;
+}
+function applyVersionInterval() {
+  const d = Number($('#v_days').value), h = Number($('#v_hours').value), m = Number($('#v_minutes').value), s = Number($('#v_seconds').value);
+  if (![d,h,m,s].every(Number.isInteger) || d < 0 || d > 3650 || h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59) {
+    alert('일은 0~3650, 시간은 0~23, 분과 초는 0~59 사이의 정수로 입력해 주세요.'); return;
+  }
+  const ms = (((d * 24 + h) * 60 + m) * 60 + s) * 1000;
+  if (ms < 1000) { alert('저장 주기는 최소 1초로 설정해 주세요.'); return; }
+  versionIntervalMs = ms;
+  try { localStorage.setItem(VERSION_INTERVAL_KEY, JSON.stringify({ms})); }
+  catch (e) { alert('저장 주기 설정을 보관하지 못했습니다.'); return; }
+  scheduleVersionCheck(true);
+  fillVersionIntervalInputs();
+}
+function scheduleVersionCheck(reset = false) {
+  clearTimeout(versionTimer);
+  if (!S || !lastVersionSnapshot) return;
+  if (reset || !versionDueAt) versionDueAt = Date.now() + versionIntervalMs;
+  const wait = Math.max(0, Math.min(versionDueAt - Date.now(), 2147483647));
+  versionTimer = setTimeout(async () => {
+    if (Date.now() < versionDueAt) { scheduleVersionCheck(); return; }
+    const snapshot = JSON.stringify(S);
+    if (snapshot !== lastVersionSnapshot) {
+      const ok = await createVersion(`주기 자동 기록 · 노드 ${S.nodes.length}개, 화살표 ${S.edges.length}개`, S);
+      if (!ok) { versionDueAt = Date.now() + Math.max(60 * 1000, Math.min(5 * 60 * 1000, versionIntervalMs)); scheduleVersionCheck(); return; }
+    }
+    versionDueAt = Date.now() + versionIntervalMs;
+    scheduleVersionCheck();
+  }, wait);
+}
+function renderVersions() {
+  const list = versions(), box = $('#versionList');
+  if (!list.length) { box.innerHTML = '<p>아직 저장된 버전이 없습니다.</p>'; return; }
+  box.innerHTML = list.map(v => `<div style="border-top:1px solid #ddd;padding:10px 0"><b>${esc(new Date(v.at).toLocaleString())}</b><br>${esc(v.summary)}<br><span style="font-size:12px;color:#777">노드 ${v.data?.nodes?.length || 0}개 · 화살표 ${v.data?.edges?.length || 0}개</span><br><button data-version-open="${esc(v.id)}">JSON 내려받기</button> <button data-version-restore="${esc(v.id)}">이 버전 복원</button> <button data-version-delete="${esc(v.id)}">삭제</button></div>`).join('');
+}
 
 const node = id => S.nodes.find(n => n.id === id);
 const edge = id => S.edges.find(e => e.id === id);
@@ -273,6 +408,15 @@ function renderPanel() {
   if (e) {
     $('#edgeText').textContent = `${node(e.from).title} → ${node(e.to).title}`;
     for (const [id, key] of EDGE_FIELDS) $('#' + id).value = e[key] ?? '';
+  }
+}
+
+function setSidebarVisible(visible, persist = false) {
+  $('aside').hidden = !visible;
+  $('#btnSidebar').textContent = visible ? '사이드바 숨기기' : '사이드바 보이기';
+  $('#btnSidebar').setAttribute('aria-pressed', String(visible));
+  if (persist) {
+    try { localStorage.setItem(SIDEBAR_KEY, visible ? '0' : '1'); } catch (e) {}
   }
 }
 
@@ -432,11 +576,28 @@ function autoLayout(mode) {
     }
     const maxL = Math.max(0, ...level.values());
     for (const n of S.nodes) if (!level.has(n.id)) level.set(n.id, maxL + 1);   // 연결 안 된 노드는 맨 오른쪽 열
+    if (mode === 'diamond' && goalNode()) level.set(goalNode().id, Math.max(...level.values()) + 1);
     const cols = new Map();
     for (const n of S.nodes) { const L = level.get(n.id); if (!cols.has(L)) cols.set(L, []); cols.get(L).push(n); }
-    for (const [L, list] of [...cols].sort((a, b) => a[0] - b[0])) {
-      list.sort((a, b) => a.y - b.y);   // 지금 위쪽에 있는 노드가 위에 오도록 순서 유지
-      list.forEach((n, i) => { n.x = 40 + L * (W + 80); n.y = 40 + i * (H + 40); });
+    const ordered = [...cols].sort((a, b) => a[0] - b[0]);
+    for (const [, list] of ordered) list.sort((a, b) => a.y - b.y || a.x - b.x);
+    if (mode === 'pyramid') {
+      const widest = Math.max(...ordered.map(([, list]) => list.length));
+      for (const [L, list] of ordered) {
+        const offset = (widest - list.length) * (W + 50) / 2;
+        list.forEach((n, i) => { n.x = 40 + offset + i * (W + 50); n.y = 40 + L * (H + 70); });
+      }
+    } else if (mode === 'diamond') {
+      const widest = Math.max(...ordered.map(([, list]) => list.length));
+      for (const [L, list] of ordered) {
+        const offset = (widest - list.length) * (W + 50) / 2;
+        list.forEach((n, i) => { n.x = 40 + offset + i * (W + 50); n.y = 40 + L * (H + 70); });
+      }
+    } else {
+      for (const [L, list] of ordered) {
+        const centerY = 40 + (list.length - 1) * (H + 40) / 2;
+        list.forEach((n, i) => { n.x = 40 + L * (W + 80); n.y = centerY - (list.length - 1) * (H + 40) / 2 + i * (H + 40); });
+      }
     }
   }
   save(); render();
@@ -480,8 +641,62 @@ function buildPresets() {
 
 /* ---------- 이벤트 ---------- */
 function svgPoint(e) { const r = svg.getBoundingClientRect(); return {x: (e.clientX - r.left) / zoom, y: (e.clientY - r.top) / zoom}; }
+function closeCanvasMenu() { $('#canvasMenu').hidden = true; }
+function addCanvasMenuAction(label, action, danger = false) {
+  const button = document.createElement('button');
+  button.type = 'button'; button.textContent = label; button.setAttribute('role', 'menuitem');
+  if (danger) button.classList.add('danger');
+  button.addEventListener('click', () => { closeCanvasMenu(); action(); });
+  $('#canvasMenu').appendChild(button);
+}
+$('#stage').addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const menu = $('#canvasMenu'), nodeTarget = e.target.closest('[data-node]'), edgeTarget = e.target.closest('[data-edge]');
+  const point = svgPoint(e);
+  menu.replaceChildren();
+  if (nodeTarget) {
+    const id = nodeTarget.dataset.node;
+    select('node', id);
+    addCanvasMenuAction('노드 편집', () => select('node', id));
+    addCanvasMenuAction('여기서 화살표 연결', () => {
+      pendingConnectionSource = id;
+      select('node', id);
+      setFstat('연결할 결과 노드를 클릭하세요. Esc를 누르면 취소됩니다.');
+    });
+    addCanvasMenuAction(node(id)?.checked ? '체크 해제' : '체크 표시', () => {
+      const n = node(id); if (!n) return;
+      n.checked = !n.checked; save(); render(); renderPanel();
+    });
+    addCanvasMenuAction('노드 삭제', () => { select('node', id); deleteSelected(); }, true);
+  } else if (edgeTarget) {
+    const id = edgeTarget.dataset.edge;
+    select('edge', id);
+    addCanvasMenuAction('화살표 편집', () => select('edge', id));
+    addCanvasMenuAction('화살표 삭제', () => { select('edge', id); deleteSelected(); }, true);
+  } else {
+    select(null, null);
+    addCanvasMenuAction('여기에 노드 추가', () => {
+      const D = dims(); addNode(point.x - D.w / 2, point.y - D.h / 2);
+    });
+    addCanvasMenuAction('화면에 맞추기', fitView);
+    addCanvasMenuAction('100% 확대', () => { zoom = 1; render(); });
+    addCanvasMenuAction('도움말', () => $('#helpDlg').showModal());
+  }
+  menu.hidden = false;
+  menu.style.left = `${e.clientX}px`; menu.style.top = `${e.clientY}px`;
+  requestAnimationFrame(() => {
+    const r = menu.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(e.clientX, innerWidth - r.width - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(e.clientY, innerHeight - r.height - 8))}px`;
+    menu.querySelector('button')?.focus();
+  });
+});
+document.addEventListener('mousedown', e => { if (!e.target.closest('#canvasMenu')) closeCanvasMenu(); });
+window.addEventListener('resize', closeCanvasMenu);
+$('#stage').addEventListener('scroll', closeCanvasMenu, {passive:true});
 
-svg.addEventListener('mousedown', e => {
+$('#stage').addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
   const ck = e.target.closest('[data-check]');
   if (ck) {                                   // 체크박스 클릭: 토글만 하고 선택은 바꾸지 않음
     const n = node(ck.dataset.check);
@@ -491,6 +706,10 @@ svg.addEventListener('mousedown', e => {
   const ng = e.target.closest('[data-node]'), eg = e.target.closest('[data-edge]');
   if (ng) {
     const id = ng.dataset.node;
+    if (pendingConnectionSource) {
+      const from = pendingConnectionSource; pendingConnectionSource = null; setFstat('');
+      if (from !== id) { addEdge(from, id); return; }
+    }
     if (e.shiftKey && sel.type === 'node' && sel.id !== id) { addEdge(sel.id, id); return; }
     select('node', id);
     const n = node(id), p = svgPoint(e);
@@ -499,15 +718,28 @@ svg.addEventListener('mousedown', e => {
     select('edge', eg.dataset.edge);
   } else {
     select(null, null);
+    const stage = $('#stage');
+    pan = {x:e.clientX, y:e.clientY, left:stage.scrollLeft, top:stage.scrollTop};
+    stage.classList.add('is-panning');
+    e.preventDefault();
   }
 });
-svg.addEventListener('mousemove', e => {
+window.addEventListener('mousemove', e => {
+  if (pan) {
+    const stage = $('#stage');
+    stage.scrollLeft = pan.left - (e.clientX - pan.x);
+    stage.scrollTop = pan.top - (e.clientY - pan.y);
+    return;
+  }
   if (!drag) return;
   const p = svgPoint(e), n = node(drag.id);
   n.x = Math.max(0, p.x - drag.dx); n.y = Math.max(0, p.y - drag.dy);
   drag.moved = true; render();
 });
-window.addEventListener('mouseup', () => { if (drag) { if (drag.moved) save(); drag = null; } });
+window.addEventListener('mouseup', () => {
+  if (drag) { if (drag.moved) save(); drag = null; }
+  if (pan) { pan = null; $('#stage').classList.remove('is-panning'); }
+});
 svg.addEventListener('dblclick', e => {
   if (e.target.closest('[data-node],[data-edge]')) return;
   const p = svgPoint(e), D = dims();
@@ -551,7 +783,42 @@ $('#btnSettingsDefault').onclick = () => { S.settings = {...DEFAULT_SETTINGS}; s
 $('#btnLayout').onclick = () => { autoLayout($('#layoutMode').value); fitView(); };
 $('#btnFit').onclick = fitView;
 $('#btnZoom100').onclick = () => { zoom = 1; render(); };
+$('#btnSidebar').onclick = () => setSidebarVisible($('aside').hidden, true);
 $('#btnSettings').onclick = () => { renderSettings(); $('#setDlg').showModal(); };
+$('#btnVersions').onclick = () => { fillVersionIntervalInputs(); renderVersions(); $('#versionDlg').showModal(); };
+$('#btnVersionClose').onclick = () => $('#versionDlg').close();
+$('#btnSaveVersionInterval').onclick = applyVersionInterval;
+$('#btnCreateVersion').onclick = async () => {
+  const input = $('#versionSummary'), summary = input.value.trim();
+  if (!summary) { input.focus(); alert('변경 요약을 적어 주세요.'); return; }
+  if (await createVersion(summary, S, true)) { input.value = ''; renderVersions(); }
+};
+$('#versionList').addEventListener('click', async e => {
+  const open = e.target.closest('[data-version-open]'), restore = e.target.closest('[data-version-restore]'), remove = e.target.closest('[data-version-delete]');
+  if (open) {
+    const v = versions().find(x => x.id === open.dataset.versionOpen);
+    if (v) download(`causal-editor-version-${v.at.slice(0,10)}.json`, JSON.stringify(v.data, null, 2), 'application/json');
+  }
+  if (restore) {
+    const v = versions().find(x => x.id === restore.dataset.versionRestore);
+    if (!v || !confirm(`“${v.summary}” 버전으로 그래프 전체를 복원할까요? 현재 상태는 복원 전 버전으로 자동 보관됩니다.`)) return;
+    if (!await createVersion('복원 전 자동 백업')) { alert('현재 상태를 변경이력 폴더에 백업하지 못해 복원을 취소했습니다.'); return; }
+    S = JSON.parse(JSON.stringify(v.data)); ensureSettings(); save(); select(null, null); render(); renderPanel(); renderSettings(); renderVersions();
+  }
+  if (remove) {
+    const v = versions().find(x => x.id === remove.dataset.versionDelete);
+    if (!v || !confirm(`${new Date(v.at).toLocaleString()} 버전을 삭제할까요? 삭제한 버전 파일은 복구할 수 없습니다.`)) return;
+    try {
+      const r = await fetch(`/api/versions/${encodeURIComponent(v.id)}`, {method:'DELETE'});
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || '삭제하지 못했습니다.');
+      const wasLatest = VERSION_LIST[0]?.id === v.id;
+      VERSION_LIST = VERSION_LIST.filter(item => item.id !== v.id);
+      if (wasLatest) lastVersionSnapshot = JSON.stringify(VERSION_LIST[0]?.data ?? S);
+      renderVersions();
+    } catch (err) { setFstat(`버전 삭제 실패: ${err.message}`); }
+  }
+});
 $('#btnSetClose').onclick = () => $('#setDlg').close();
 $('#btnSave').onclick = () => download('causal-editor.json', JSON.stringify(S, null, 2), 'application/json');
 
@@ -560,11 +827,12 @@ $('#file').addEventListener('change', async e => {
   try {
     const o = JSON.parse(await f.text());
     if (!Array.isArray(o.nodes)) throw new Error('bad');
+    if (!await createVersion('JSON 불러오기 전 자동 백업')) throw new Error('현재 상태를 변경이력 폴더에 백업하지 못했습니다.');
     S = o; S.edges = S.edges || []; S.nextId = S.nextId || 100;
     ensureSettings();
-    save(); select(null, null); renderSettings();
+    save(); await createVersion('JSON 파일 불러옴'); select(null, null); renderSettings(); render(); renderPanel();
   } catch (err) {
-    alert('인과 편집기 JSON 파일이 아닙니다.');
+    alert(`JSON 불러오기 실패: ${err.message}`);
   }
   e.target.value = '';
 });
@@ -586,24 +854,34 @@ $('#btnOpenMd').onclick = async () => {
   }
 };
 $('#btnDelEdge').onclick = deleteSelected;
-$('#btnReset').onclick = () => {
+$('#btnReset').onclick = async () => {
   if (!confirm('모든 노드와 화살표를 지우고 처음부터 시작할까요? (설정은 유지됩니다)')) return;
+  if (!await createVersion('초기화 전 자동 백업')) { alert('현재 상태를 변경이력 폴더에 백업하지 못해 초기화를 취소했습니다.'); return; }
   const keep = S.settings;
-  S = initial(); S.settings = keep; save(); select(null, null);
+  S = initial(); S.settings = keep; save(); await createVersion('그래프 초기화'); select(null, null);
 };
 
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeCanvasMenu();
+    if (pendingConnectionSource) { pendingConnectionSource = null; setFstat('화살표 연결을 취소했습니다.'); }
+    return;
+  }
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
 });
-
 /* ---------- 시작 ---------- */
 S = load() || initial();
 if (!S.nextId) S.nextId = 10;
 ensureSettings();
+let sidebarHiddenAtLoad = false;
+try { sidebarHiddenAtLoad = localStorage.getItem(SIDEBAR_KEY) === '1'; } catch (e) {}
+setSidebarVisible(!sidebarHiddenAtLoad);
+fillVersionIntervalInputs();
 buildPresets();
 render(); renderPanel();
 syncNodeFiles();
+loadVersions().then(() => { renderVersions(); scheduleVersionCheck(true); }).catch(err => setFstat(`변경 이력 폴더에 접근할 수 없습니다: ${err.message}`));
 </script>
 </body>
 </html>
