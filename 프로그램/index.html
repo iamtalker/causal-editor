@@ -14,6 +14,7 @@
   button:hover,.btn:hover{background:#f4f7fb;border-color:#aab5c4}
   button:focus-visible,.btn:focus-visible,select:focus-visible{outline:2px solid #93c5fd;outline-offset:1px}
   #btnVersions{border-color:#bfd3f7;background:#f5f8ff;color:#1d4ed8}
+  #btnFocus[aria-pressed="true"]{border-color:#2563eb;background:#eff6ff;color:#1d4ed8}
   #btnReset{color:#6b7280}
   #layoutMode{max-width:170px;padding:6px 8px;border:1px solid #cbd2dc;border-radius:7px;background:white;font:inherit;font-size:13px;color:#263244}
   #fstat{display:block;min-width:0;max-width:260px;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -21,6 +22,7 @@
   .btn input{display:none}
   main{flex:1;display:flex;min-height:0}
   #stage{flex:1;overflow:auto;background:#fafafa;scrollbar-color:#aab2bd #edf0f4;cursor:grab}
+  #canvas{display:block;margin-inline:auto}
   #stage.is-panning{cursor:grabbing;user-select:none}
   #canvasMenu{position:fixed;z-index:30;min-width:190px;padding:5px;border:1px solid #d4d9e1;border-radius:9px;background:#fff;box-shadow:0 8px 24px #18223026}
   #canvasMenu[hidden]{display:none}
@@ -46,6 +48,7 @@
   .cl{display:block;font-size:13px}
   .crow{display:flex;gap:6px;align-items:center;margin-top:4px}
   .crow input{width:110px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:13px}
+  #s_canvasPadding{width:100px;padding:5px 6px;border:1px solid #ccc;border-radius:6px;font:inherit}
   .sw{display:inline-block;width:26px;height:26px;border-radius:4px;border:1px solid #999}
   .presets{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
   .interval-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
@@ -63,10 +66,10 @@
 <header>
   <div class="toolbar-group"><h1>인과 편집기</h1><button id="btnHelp">도움말</button></div>
   <div class="toolbar-group"><button id="btnAdd">노드 추가</button>
-    <select id="layoutMode" title="자동 정렬 방식">
+    <select id="layoutMode" title="정렬 방식을 선택하면 바로 적용됩니다">
       <option value="layered">계층 · 좌→우</option><option value="pyramid" title="인과 단계별 위에서 아래로">피라미드</option><option value="diamond" title="시작은 위, 종료는 아래에 두고 가운데를 넓힘">다이아몬드</option><option value="circle">원형</option><option value="grid">격자</option>
-    </select><button id="btnLayout">자동 정렬</button></div>
-  <div class="toolbar-group"><button id="btnFit">화면에 맞추기</button><button id="btnZoom100">100%</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
+    </select></div>
+  <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드와 바로 연결된 노드만 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
   <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReset">초기화</button></div>
   <span id="fstat" class="muted"></span>
 </header>
@@ -79,7 +82,7 @@
     </div>
     <div id="nodeForm" hidden>
       <div class="muted" id="nodeKind"></div>
-      <label><input type="checkbox" id="f_checked"> 체크 (강조 색으로 표시)</label>
+  <label><input type="checkbox" id="f_checked"> 체크 (체크 강조 색으로 표시)</label>
       <label>역할
         <select id="f_kind">
           <option value="normal">일반</option><option value="start">시작</option><option value="goal">종료</option>
@@ -112,10 +115,11 @@
     <li>노드 선택 후 Shift+클릭 다른 노드: 화살표 연결 (원인 → 결과)</li>
     <li>화살표를 클릭하면 그 인과의 설명과 메모를 적을 수 있습니다</li>
     <li>노드·화살표 선택 후 Delete: 삭제</li>
-    <li>노드 오른쪽 위 체크박스: 체크하면 그 노드의 테두리가 강조 색으로 바뀝니다</li>
-    <li>양 끝 노드가 모두 체크된 화살표는 강조 색으로 표시됩니다</li>
+    <li>노드 오른쪽 위 체크박스: 체크한 노드는 초록색, 현재 선택한 노드는 파란색 테두리로 표시됩니다</li>
+    <li>양 끝 노드가 모두 체크된 화살표는 체크 강조 색으로 표시됩니다</li>
+    <li>포커스 모드: 선택 노드와 바로 연결된 노드만 표시합니다. 체크 강조와는 별개이며, 포커스 종료를 누르면 전체 그래프가 다시 보입니다</li>
     <li>노드 편집 칸에서 시작·종료 노드를 정하면 계층, 피라미드, 다이아몬드 정렬의 기준이 됩니다</li>
-    <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양과 색, 체크 강조 색을 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
+    <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양과 색, 체크 강조 색, 선택 강조 색을 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
   </ul>
   <button id="btnHelpClose">닫기</button>
 </dialog>
@@ -154,11 +158,19 @@
   <div class="cset"><span class="cl">연결선 색</span>
     <div class="crow"><input type="text" id="s_lineColor" maxlength="7" placeholder="#9ca3af"><span class="sw" id="sw_lineColor"></span></div>
     <div class="presets" id="p_lineColor"></div></div>
-  <div class="cset"><span class="cl">체크 강조 색 (테두리와 연결 화살표)</span>
+  <div class="cset"><span class="cl">체크 강조 색 (체크된 노드와 연결 화살표)</span>
     <div class="crow"><input type="text" id="s_highlightColor" maxlength="7" placeholder="#2563eb"><span class="sw" id="sw_highlightColor"></span></div>
     <div class="presets" id="p_highlightColor"></div></div>
+  <div class="cset"><span class="cl">선택 강조 색 (현재 선택한 노드 테두리)</span>
+    <div class="crow"><input type="text" id="s_selectionColor" maxlength="7" placeholder="#ea580c"><span class="sw" id="sw_selectionColor"></span></div>
+    <div class="presets" id="p_selectionColor"></div></div>
+  <label>캔버스 바깥 여백 (px)
+    <input type="number" id="s_canvasPadding" min="0" max="1000" step="20">
+  </label>
+  <div class="muted">그래프 주위에 확보할 빈 작업 공간입니다. 전체 그래프 보기에도 포함됩니다.</div>
   <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
     <label class="btn">JSON 불러오기<input type="file" id="file" accept=".json"></label>
+    <button id="btnLoadExample" type="button">예시 가져오기</button>
     <button id="btnSave">JSON 저장</button>
     <button id="btnSettingsDefault">기본값으로</button>
   </div>
@@ -171,16 +183,17 @@ const VERSION_KEY = 'causal-editor-versions-v1';
 const VERSION_INTERVAL_KEY = 'causal-editor-version-interval-v1';
 const SIDEBAR_KEY = 'causal-editor-sidebar-hidden-v1';
 const RECT = {w: 200, h: 110}, CIRCLE = {w: 130, h: 130};
-const DEFAULT_SETTINGS = {shape:'rect', nodeColor:'#ffffff', bgColor:'#fafafa', lineStyle:'curve', lineColor:'#9ca3af', highlightColor:'#2563eb'};
+const DEFAULT_SETTINGS = {shape:'rect', nodeColor:'#ffffff', bgColor:'#fafafa', lineStyle:'curve', lineColor:'#9ca3af', highlightColor:'#2563eb', selectionColor:'#ea580c', canvasPadding:120};
 const NODE_FIELDS = [['f_title','title'],['f_now','now'],['f_memo','memo']];
 const EDGE_FIELDS = [['e_label','label'],['e_memo','memo']];
 const SELECT_CTRL = [['s_shape','shape'],['s_lineStyle','lineStyle']];
-const COLOR_CTRL = ['nodeColor','bgColor','lineColor','highlightColor'];   // 네이티브 색상 창 대신 입력칸 + 색 견본 방식
+const COLOR_CTRL = ['nodeColor','bgColor','lineColor','highlightColor','selectionColor'];   // 네이티브 색상 창 대신 입력칸 + 색 견본 방식
 const PRESETS = {
   nodeColor: ['#ffffff','#f8fafc','#fef9c3','#dcfce7','#dbeafe','#fce7f3'],
   bgColor: ['#fafafa','#f4f5f7','#f5f0e6','#ffffff','#1e293b','#0f172a'],
   lineColor: ['#9ca3af','#6b7280','#475569','#a8a29e','#94a3b8','#cbd5e1'],
-  highlightColor: ['#2563eb','#7c3aed','#0891b2','#db2777','#ea580c','#111827']
+  highlightColor: ['#2563eb','#1d4ed8','#0891b2','#7c3aed','#ea580c','#111827'],
+  selectionColor: ['#ea580c','#dc2626','#7c3aed','#0891b2','#db2777','#111827']
 };
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -189,7 +202,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 const svg = $('#canvas');
 
 let S, sel = {type: null, id: null}, drag = null, pan = null, pendingConnectionSource = null;
-let zoom = 1, lastCW = 800, lastCH = 600;   // 화면 확대/축소 비율(저장하지 않음), 캔버스 크기
+let focusMode = false, focusNodeId = null;
+let zoom = 1, lastCW = 800, lastCH = 600, viewMinX = 0, viewMinY = 0;   // 확대율과 뷰박스(저장하지 않음)
 let versionTimer = null, versionDueAt = 0, versionIntervalMs = 60 * 60 * 1000;
 let lastVersionSnapshot = '', VERSION_LIST = [];
 
@@ -329,11 +343,21 @@ function analyze() {
 
 /* ---------- 렌더링 ---------- */
 function render() {
-  const g = analyze(), st = S.settings, D = dims(), W = D.w, H = D.h, hl = st.highlightColor;
+  const g = analyze(), st = S.settings, D = dims(), W = D.w, H = D.h, checkColor = st.highlightColor, selectionColor = st.selectionColor;
+  if (focusNodeId && !node(focusNodeId)) focusNodeId = null;
+  const visibleNodeIds = new Set(S.nodes.map(n => n.id));
+  if (focusMode && focusNodeId) {
+    visibleNodeIds.clear(); visibleNodeIds.add(focusNodeId);
+    for (const e of S.edges) {
+      if (e.from === focusNodeId) visibleNodeIds.add(e.to);
+      if (e.to === focusNodeId) visibleNodeIds.add(e.from);
+    }
+  }
   $('#stage').style.background = st.bgColor;
   let h = `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#555"/></marker></defs>`;
 
   for (const e of S.edges) {
+    if (!visibleNodeIds.has(e.from) || !visibleNodeIds.has(e.to)) continue;
     const a = node(e.from), b = node(e.to);
     const forward = a.x + W / 2 <= b.x + W / 2;
     const x1 = forward ? a.x + W : a.x, x2 = forward ? b.x : b.x + W;
@@ -346,7 +370,7 @@ function render() {
       d = `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
     }
     const hi = !!(a.checked && b.checked);   // 양 끝 노드가 모두 체크된 화살표만 강조 색
-    const color = hi ? hl : st.lineColor;
+    const color = hi ? checkColor : st.lineColor;
     // 강조는 체크된 것만: 양 끝이 모두 체크된 화살표만 굵고 강조 색, 나머지는 가는 일반 선
     const w = (hi ? 4 : 1) + (sel.type === 'edge' && sel.id === e.id ? 2 : 0);
     h += `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" marker-end="url(#arr)"/>`;
@@ -357,10 +381,11 @@ function render() {
   }
 
   for (const n of S.nodes) {
+    if (!visibleNodeIds.has(n.id)) continue;
     const isSel = sel.type === 'node' && sel.id === n.id;
     const fill = n.kind === 'start' ? '#ecfdf5' : n.kind === 'goal' ? '#fef2f2' : st.nodeColor;
-    const on = n.checked || isSel;
-    const stroke = on ? hl : '#94a3b8', sw = on ? 4 : 2;
+    const stroke = isSel ? selectionColor : n.checked ? checkColor : '#94a3b8';
+    const sw = isSel || n.checked ? 4 : 2;
     let body, cbx, cby;
     if (st.shape === 'circle') {
       body = `<circle cx="${W / 2}" cy="${H / 2}" r="${W / 2 - 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
@@ -375,14 +400,18 @@ function render() {
     }
     h += `<g data-node="${n.id}" transform="translate(${n.x},${n.y})" style="cursor:move">${body}
       <g data-check="${n.id}" transform="translate(${cbx},${cby})" style="cursor:pointer">
-        <rect width="16" height="16" rx="3" fill="#fff" stroke="${n.checked ? hl : '#64748b'}" stroke-width="1.5"/>
-        ${n.checked ? `<path d="M3,8 L7,12 L13,4" fill="none" stroke="${hl}" stroke-width="2.5"/>` : ''}
+        <rect width="16" height="16" rx="3" fill="#fff" stroke="${n.checked ? checkColor : '#64748b'}" stroke-width="1.5"/>
+        ${n.checked ? `<path d="M3,8 L7,12 L13,4" fill="none" stroke="${checkColor}" stroke-width="2.5"/>` : ''}
       </g></g>`;
   }
   // 캔버스 크기: 노드가 모두 들어갈 만큼 키우고, 확대/축소 비율을 적용
-  const maxX = Math.max(0, ...S.nodes.map(n => n.x + W)), maxY = Math.max(0, ...S.nodes.map(n => n.y + H));
-  lastCW = Math.max(800, maxX + 40); lastCH = Math.max(600, maxY + 40);
-  svg.setAttribute('viewBox', `0 0 ${lastCW} ${lastCH}`);
+  const padding = Math.max(0, Math.min(1000, Number(st.canvasPadding) || 0));
+  const minNodeX = Math.min(0, ...S.nodes.map(n => n.x)), minNodeY = Math.min(0, ...S.nodes.map(n => n.y));
+  const maxNodeX = Math.max(800, ...S.nodes.map(n => n.x + W + 40)), maxNodeY = Math.max(600, ...S.nodes.map(n => n.y + H + 40));
+  viewMinX = minNodeX - padding; viewMinY = minNodeY - padding;
+  lastCW = Math.max(800, maxNodeX - minNodeX + padding * 2);
+  lastCH = Math.max(600, maxNodeY - minNodeY + padding * 2);
+  svg.setAttribute('viewBox', `${viewMinX} ${viewMinY} ${lastCW} ${lastCH}`);
   svg.setAttribute('width', lastCW * zoom);
   svg.setAttribute('height', lastCH * zoom);
   svg.innerHTML = h;
@@ -420,7 +449,27 @@ function setSidebarVisible(visible, persist = false) {
   }
 }
 
-function select(type, id) { sel = {type, id}; render(); renderPanel(); }
+function select(type, id) {
+  sel = {type, id};
+  if (focusMode && type === 'node') focusNodeId = id;
+  render(); renderPanel();
+}
+
+function toggleFocusMode() {
+  if (focusMode) {
+    focusMode = false; focusNodeId = null;
+    $('#btnFocus').textContent = '포커스 모드';
+    $('#btnFocus').setAttribute('aria-pressed', 'false');
+    setFstat('전체 그래프를 표시합니다.');
+  } else {
+    focusMode = true;
+    focusNodeId = sel.type === 'node' ? sel.id : null;
+    $('#btnFocus').textContent = '포커스 종료';
+    $('#btnFocus').setAttribute('aria-pressed', 'true');
+    setFstat(focusNodeId ? '선택 노드와 바로 연결된 노드만 표시합니다.' : '포커스할 노드를 선택하세요.');
+  }
+  render();
+}
 
 /* ---------- 편집 동작 ---------- */
 // 사용 중이 아닌 가장 작은 번호를 씁니다. 예) n1, n2, n4가 있으면 다음은 n3
@@ -613,6 +662,7 @@ function fitView() {
 /* ---------- 설정 ---------- */
 function renderSettings() {
   for (const [id, key] of SELECT_CTRL) $('#' + id).value = S.settings[key];
+  $('#s_canvasPadding').value = S.settings.canvasPadding;
   for (const key of COLOR_CTRL) {
     $('#s_' + key).value = S.settings[key];
     $('#sw_' + key).style.background = S.settings[key];
@@ -640,7 +690,7 @@ function buildPresets() {
 }
 
 /* ---------- 이벤트 ---------- */
-function svgPoint(e) { const r = svg.getBoundingClientRect(); return {x: (e.clientX - r.left) / zoom, y: (e.clientY - r.top) / zoom}; }
+function svgPoint(e) { const r = svg.getBoundingClientRect(); return {x: (e.clientX - r.left) / zoom + viewMinX, y: (e.clientY - r.top) / zoom + viewMinY}; }
 function closeCanvasMenu() { $('#canvasMenu').hidden = true; }
 function addCanvasMenuAction(label, action, danger = false) {
   const button = document.createElement('button');
@@ -678,8 +728,8 @@ $('#stage').addEventListener('contextmenu', e => {
     addCanvasMenuAction('여기에 노드 추가', () => {
       const D = dims(); addNode(point.x - D.w / 2, point.y - D.h / 2);
     });
-    addCanvasMenuAction('화면에 맞추기', fitView);
-    addCanvasMenuAction('100% 확대', () => { zoom = 1; render(); });
+    addCanvasMenuAction('전체 그래프 보기', fitView);
+    addCanvasMenuAction('실제 크기', () => { zoom = 1; render(); });
     addCanvasMenuAction('도움말', () => $('#helpDlg').showModal());
   }
   menu.hidden = false;
@@ -779,10 +829,17 @@ for (const key of COLOR_CTRL) {
   input.addEventListener('change', apply);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
 }
+$('#s_canvasPadding').addEventListener('input', e => {
+  const value = Number(e.target.value);
+  if (!Number.isFinite(value)) return;
+  S.settings.canvasPadding = Math.max(0, Math.min(1000, value));
+  save(); render();
+});
 $('#btnSettingsDefault').onclick = () => { S.settings = {...DEFAULT_SETTINGS}; save(); render(); renderSettings(); };
-$('#btnLayout').onclick = () => { autoLayout($('#layoutMode').value); fitView(); };
+$('#layoutMode').onchange = () => { autoLayout($('#layoutMode').value); fitView(); };
 $('#btnFit').onclick = fitView;
 $('#btnZoom100').onclick = () => { zoom = 1; render(); };
+$('#btnFocus').onclick = toggleFocusMode;
 $('#btnSidebar').onclick = () => setSidebarVisible($('aside').hidden, true);
 $('#btnSettings').onclick = () => { renderSettings(); $('#setDlg').showModal(); };
 $('#btnVersions').onclick = () => { fillVersionIntervalInputs(); renderVersions(); $('#versionDlg').showModal(); };
@@ -821,6 +878,22 @@ $('#versionList').addEventListener('click', async e => {
 });
 $('#btnSetClose').onclick = () => $('#setDlg').close();
 $('#btnSave').onclick = () => download('causal-editor.json', JSON.stringify(S, null, 2), 'application/json');
+
+$('#btnLoadExample').onclick = async () => {
+  if (!confirm('현재 그래프 대신 “부자 되기” 예시를 불러올까요? 현재 그래프는 변경이력에 먼저 백업됩니다.')) return;
+  try {
+    const r = await fetch('/api/sample');
+    const o = await r.json();
+    if (!r.ok || !Array.isArray(o.nodes)) throw new Error(o.error || '예시 파일을 읽지 못했습니다.');
+    if (!await createVersion('예시 불러오기 전 자동 백업')) throw new Error('현재 그래프를 변경이력에 백업하지 못했습니다.');
+    S = o; S.edges = S.edges || []; S.nextId = S.nextId || 100;
+    ensureSettings(); save(); await createVersion('부자 되기 예시 불러옴');
+    focusMode = false; focusNodeId = null;
+    $('#btnFocus').textContent = '포커스 모드'; $('#btnFocus').setAttribute('aria-pressed', 'false');
+    select(null, null); renderSettings(); render(); renderPanel(); fitView();
+    $('#setDlg').close();
+  } catch (err) { alert(`예시 불러오기 실패: ${err.message}`); }
+};
 
 $('#file').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;

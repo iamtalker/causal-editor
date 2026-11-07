@@ -31,6 +31,17 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.method === 'GET' && req.url === '/api/sample') {
+    try {
+      const samplePath = path.join(ROOT, '샘플', '샘플_부자되기.json');
+      const sample = fs.readFileSync(samplePath, 'utf8');
+      JSON.parse(sample); // 손상된 샘플은 그래프에 적용하지 않도록 확인
+      res.writeHead(200, {'Content-Type': 'application/json; charset=utf-8'});
+      res.end(sample);
+    } catch (err) { sendJson(res, 500, {ok: false, error: '부자 되기 예시를 읽지 못했습니다.'}); }
+    return;
+  }
+
   if (req.method === 'GET' && req.url === '/api/versions') {
     try {
       fs.mkdirSync(HISTORY_DIR, {recursive: true});
