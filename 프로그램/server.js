@@ -13,8 +13,18 @@ const IDLE_MS = Number(process.env.EDITOR_IDLE_MS) || 90000;
 let lastSeen = Date.now() + IDLE_MS;   // 처음 페이지가 열릴 시간을 줍니다
 const APP_DIR = __dirname;
 const ROOT = path.resolve(APP_DIR, '..');
-const NODE_DIR = path.join(ROOT, '노드파일');
-const HISTORY_DIR = path.join(ROOT, '변경이력');
+// 데이터 폴더: 설정 창에서 지정한 외부 폴더가 있으면 노드파일·변경이력을 그곳에 둡니다. 없으면 프로젝트 폴더입니다.
+const CONFIG_FILE = path.join(APP_DIR, 'data-folder.json');
+function readDataFolder() {
+  try {
+    const p = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')).path;
+    if (p && fs.existsSync(p) && fs.statSync(p).isDirectory()) return path.resolve(p);
+  } catch (err) { /* 설정이 없으면 기본 폴더 */ }
+  return ROOT;
+}
+const DATA_DIR = readDataFolder();
+const NODE_DIR = path.join(DATA_DIR, '노드파일');
+const HISTORY_DIR = path.join(DATA_DIR, '변경이력');
 // 이 프로그램이 만든 파일 이름 패턴: n1_제목.md, n12_제목.md, _경로.md
 const OWN_FILE = /^(n\d+_.*|_경로)\.md$/;
 const HISTORY_FILE = /^\d{8}T\d{6}Z_[a-z0-9-]+\.json$/;
@@ -211,6 +221,50 @@ const server = http.createServer((req, res) => {
         send(400, {ok: false, error: err.message});
       }
     });
+    return;
+  }
+
+  // 폴더 고르기 창: 하위 폴더 목록 (path가 비어 있으면 드라이브 목록)
+  if (req.method === 'GET' && req.url.startsWith('/api/folders')) {
+    try {
+      const requested = new URL(req.url, 'http://localhost').searchParams.get('path') || '';
+      if (!requested) {
+        const drives = [];
+        for (let c = 67; c <= 90; c++) {   // C:~Z:
+          const root = String.fromCharCode(c) + ':\\';
+          if (fs.existsSync(root)) drives.push({name: root.slice(0, 2), path: root});
+        }
+        return sendJson(res, 200, {ok: true, current: '', parent: null, dirs: drives});
+      }
+      const full = path.resolve(requested);
+      if (!fs.existsSync(full) || !fs.statSync(full).isDirectory()) return sendJson(res, 400, {ok: false, error: '폴더를 찾지 못했습니다.'});
+      const dirs = fs.readdirSync(full, {withFileTypes: true})
+        .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+        .map(e => ({name: e.name, path: path.join(full, e.name)}))
+        .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+      const up = path.dirname(full);
+      return sendJson(res, 200, {ok: true, current: full, parent: up === full ? '' : up, dirs});
+    } catch (err) { return sendJson(res, 500, {ok: false, error: err.message}); }
+  }
+
+  // 데이터 폴더 설정 보기
+  if (req.method === 'GET' && req.url === '/api/data-folder') {
+    return sendJson(res, 200, {ok: true, active: DATA_DIR, default: ROOT});
+  }
+
+  // 데이터 폴더 설정 저장 (적용은 편집기를 다시 실행한 뒤)
+  if (req.method === 'POST' && req.url === '/api/data-folder') {
+    readBody(req).then(body => {
+      const requested = String(JSON.parse(body).path || '').trim();
+      if (!requested) {
+        try { fs.unlinkSync(CONFIG_FILE); } catch (err) { /* 이미 없음 */ }
+        return sendJson(res, 200, {ok: true, path: '', note: '프로젝트 폴더를 쓰도록 되돌렸습니다. 편집기를 다시 실행하면 적용됩니다.'});
+      }
+      const full = path.resolve(requested);
+      if (!fs.existsSync(full) || !fs.statSync(full).isDirectory()) return sendJson(res, 400, {ok: false, error: '폴더가 없습니다. 경로를 확인해 주세요.'});
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify({path: full}, null, 2), 'utf8');
+      sendJson(res, 200, {ok: true, path: full, note: '저장했습니다. 편집기를 다시 실행하면 이 폴더를 씁니다.'});
+    }).catch(err => sendJson(res, 400, {ok: false, error: err.message}));
     return;
   }
 

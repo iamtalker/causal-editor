@@ -196,7 +196,18 @@
     <button id="btnSave">JSON 저장</button>
     <button id="btnSettingsDefault">기본값으로</button>
   </div>
+  <h3 style="font-size:14px;margin:14px 0 4px">데이터 폴더</h3>
+  <div class="muted">노드 파일과 변경 이력을 이 폴더에 저장하고 읽습니다. 비워 두면 프로젝트 폴더를 씁니다. 바꾼 뒤에는 편집기를 다시 실행해야 적용됩니다.</div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px"><button id="btnDataFolderPick" type="button">폴더 고르기</button><button id="btnDataFolderDefault" type="button">프로젝트 폴더로 되돌리기</button></div>
+  <div id="dataFolderStatus" class="muted" style="margin-top:6px;word-break:break-all"></div>
   <button id="btnSetClose">닫기</button>
+</dialog>
+<dialog id="folderDlg" style="max-width:560px;width:90vw">
+  <h3 style="margin-top:0;font-size:16px">데이터 폴더 고르기</h3>
+  <div class="muted">이 폴더 안에 노드파일과 변경이력을 만듭니다. 폴더를 눌러 들어가고, 아래 버튼으로 선택합니다.</div>
+  <div id="folderNow" style="margin:8px 0;font-weight:600;word-break:break-all"></div>
+  <div style="display:flex;gap:6px;margin-bottom:8px"><button id="folderUp" type="button">⬆ 상위 폴더</button><button id="folderUse" type="button">이 폴더 선택</button><button id="folderCancel" type="button">취소</button></div>
+  <div id="folderList" style="max-height:50vh;overflow:auto"></div>
 </dialog>
 <dialog id="pickDlg" style="max-width:560px;width:90vw">
   <h3>프로젝트 폴더의 JSON 고르기</h3>
@@ -1189,6 +1200,52 @@ $('#versionList').addEventListener('click', async e => {
   }
 });
 $('#btnSetClose').onclick = () => $('#setDlg').close();
+async function loadDataFolderSetting() {
+  try {
+    const d = await (await fetch('/api/data-folder')).json();
+    $('#dataFolderStatus').textContent = `현재 사용 중: ${d.active}`;
+  } catch (err) { $('#dataFolderStatus').textContent = '데이터 폴더 설정을 읽지 못했습니다.'; }
+}
+async function saveDataFolder(p) {
+  try {
+    const r = await fetch('/api/data-folder', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: p})});
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    $('#dataFolderStatus').textContent = `${d.note}${d.path ? ` (${d.path})` : ''}`;
+    return true;
+  } catch (err) { alert(`데이터 폴더 저장 실패: ${err.message}`); return false; }
+}
+let folderPickPath = '';
+async function browseFolder(p) {
+  const d = await (await fetch('/api/folders' + (p ? `?path=${encodeURIComponent(p)}` : ''))).json();
+  if (!d.ok) { alert(d.error); return; }
+  folderPickPath = d.current;
+  $('#folderNow').textContent = d.current || '드라이브 목록';
+  $('#folderUp').disabled = d.parent === null;
+  $('#folderUp').onclick = () => browseFolder(d.parent || '');
+  $('#folderUse').disabled = !d.current;
+  const list = $('#folderList');
+  list.textContent = '';
+  for (const dir of d.dirs) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = dir.name;
+    b.style.cssText = 'display:block;width:100%;text-align:left;margin-bottom:3px';
+    b.onclick = () => browseFolder(dir.path);
+    list.appendChild(b);
+  }
+}
+$('#btnDataFolderPick').onclick = async () => {
+  const d = await (await fetch('/api/data-folder')).json();
+  $('#folderDlg').showModal();
+  await browseFolder(d.active || '');
+};
+$('#folderUse').onclick = async () => {
+  if (!folderPickPath) return;
+  if (await saveDataFolder(folderPickPath)) $('#folderDlg').close();
+};
+$('#folderCancel').onclick = () => $('#folderDlg').close();
+$('#btnDataFolderDefault').onclick = () => saveDataFolder('');
+loadDataFolderSetting();
 $('#btnSave').onclick = () => download('causal-editor.json', JSON.stringify(S, null, 2), 'application/json');
 
 $('#btnLoadExample').onclick = loadSampleGraph;
