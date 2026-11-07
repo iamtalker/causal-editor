@@ -33,20 +33,10 @@
   #tip{position:sticky;top:0;z-index:1;background:#fffbe6;border-bottom:1px solid #f0e0a0;padding:6px 12px;font-size:13px;color:#554}
   aside{width:300px;flex:0 0 300px;border-left:1px solid #e1e5eb;background:#fff;padding:18px 16px;overflow:auto;box-sizing:border-box}
   aside[hidden]{display:none}
-  #graphLibrary{margin:-4px -4px 16px;padding:0 4px 14px;border-bottom:1px solid #e5e7eb}
-  #graphLibrary h2{font-size:14px;margin:0 0 8px}
-  #graphList{display:grid;gap:6px;max-height:230px;overflow:auto}
-  .graph-choice{width:100%;padding:8px 9px;text-align:left;white-space:normal;font-size:12px;line-height:1.45}
-  .graph-choice.active{border-color:#2563eb;background:#eff6ff;color:#1d4ed8}
-  .graph-choice small{display:block;color:#667085;font-size:11px;margin-top:2px}
-  .graph-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
-  .graph-row .graph-choice{flex:1;min-width:0}
-  #graphList{max-height:55vh;overflow:auto;margin-top:8px}
   #help{color:#667085;font-size:13px;line-height:1.75}
   aside label{display:block;font-size:12px;color:#555;margin-top:10px}
   aside input,aside textarea,aside select{width:100%;box-sizing:border-box;padding:6px;border:1px solid #ccc;border-radius:6px;font:inherit;margin-top:3px}
   aside textarea{min-height:52px;resize:vertical}
-  aside input[type=checkbox]{width:auto;margin:0 6px 0 0}
   aside button{margin-top:12px}
   dialog{border:1px solid #ccc;border-radius:10px;padding:18px 20px;max-width:520px;width:90vw;color:#222}
   dialog::backdrop{background:rgba(0,0,0,.3)}
@@ -79,27 +69,31 @@
       <option value="layered">계층 · 좌→우</option><option value="pyramid" title="인과 단계별 위에서 아래로">피라미드</option><option value="diamond" title="시작은 위, 종료는 아래에 두고 가운데를 넓힘">다이아몬드</option><option value="circle">원형</option><option value="grid">격자</option>
     </select></div>
   <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드와 바로 연결된 노드만 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
-  <div class="toolbar-group"><button id="btnGraphs">그래프 목록</button><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReset">초기화</button></div>
+  <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReset">초기화</button></div>
   <span id="fstat" class="muted"></span>
 </header>
 <main>
   <div id="stage"><div id="tip"></div><svg id="canvas" width="2400" height="1600"></svg></div>
   <aside>
     <div id="help" class="hint">
-      오른쪽 그래프 목록에서 예시나 저장된 그래프를 선택해 전환할 수 있습니다.<br><br>
+      인과 그래프 하나를 편집합니다. 그래프 JSON과 노드 Markdown은 노드파일 폴더에 저장됩니다.<br><br>
       노드나 화살표를 클릭하면 여기에서 내용을 편집할 수 있습니다.<br>
       사용법은 상단의 <b>도움말</b> 버튼을 누르세요.
     </div>
     <div id="nodeForm" hidden>
       <div class="muted" id="nodeKind"></div>
-  <label><input type="checkbox" id="f_checked"> 체크 (체크 강조 색으로 표시)</label>
+      <label>진행 상태
+        <select id="f_status">
+          <option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="on_hold">보류</option><option value="stopped">중단</option><option value="failed">실패</option>
+        </select>
+      </label>
       <label>역할
         <select id="f_kind">
           <option value="normal">일반</option><option value="start">시작</option><option value="goal">종료</option>
         </select>
       </label>
       <label>제목<input id="f_title"></label>
-      <label>현재 (이 노드의 상태)<textarea id="f_now"></textarea></label>
+      <label>현재 상태<textarea id="f_now"></textarea></label>
       <label>메모<textarea id="f_memo"></textarea></label>
       <button id="btnOpenMd">노드 md 파일 열기</button>
       <button id="btnDelNode">이 노드 삭제</button>
@@ -115,17 +109,6 @@
 
 <div id="canvasMenu" role="menu" aria-label="캔버스 메뉴" hidden></div>
 
-<dialog id="graphDlg" style="max-width:560px;width:90vw">
-  <h2 style="margin-top:0;font-size:17px">그래프 목록</h2>
-  <p class="hint">이름을 누르면 그 그래프로 바꿉니다. 삭제한 그래프 폴더는 변경이력 폴더의 '삭제된_그래프'로 옮겨져 복구할 수 있습니다. 지금 열려 있는 그래프는 삭제할 수 없습니다.</p>
-  <div id="graphList" class="hint">저장된 그래프를 불러오는 중…</div>
-  <div class="merge-box">
-    <div class="muted">왼쪽 체크칸으로 2개 이상 고른 뒤 합치면, 노드와 화살표를 모은 새 그래프가 만들어집니다. 원래 그래프는 그대로 남습니다.</div>
-    <label>새 그래프 이름<input id="mergeName" placeholder="합친_그래프"></label>
-    <button id="btnMerge" type="button">체크한 그래프 합치기</button>
-  </div>
-  <button id="btnGraphClose" type="button">닫기</button>
-</dialog>
 <dialog id="helpDlg">
   <h2 style="margin-top:0;font-size:17px">도움말</h2>
   <ul class="hint" style="padding-left:18px;margin:0">
@@ -136,26 +119,17 @@
     <li>노드 선택 후 Shift+클릭 다른 노드: 화살표 연결 (원인 → 결과)</li>
     <li>화살표를 클릭하면 그 인과의 설명과 메모를 적을 수 있습니다</li>
     <li>노드·화살표 선택 후 Delete: 삭제</li>
-    <li>노드 오른쪽 위 체크박스: 체크한 노드는 초록색, 현재 선택한 노드는 파란색 테두리로 표시됩니다</li>
-    <li>양 끝 노드가 모두 체크된 화살표는 체크 강조 색으로 표시됩니다</li>
-    <li>포커스 모드: 선택 노드와 바로 연결된 노드만 표시합니다. 체크 강조와는 별개이며, 포커스 종료를 누르면 전체 그래프가 다시 보입니다</li>
+    <li>노드를 선택해 진행 상태(미착수·진행 중·완료·보류·중단·실패)와 현재 상태를 편집합니다. 상태마다 노드 색이 다릅니다</li>
+    <li>포커스 모드: 선택 노드와 바로 연결된 노드만 표시합니다. 진행 상태와 색은 바뀌지 않으며, 포커스 종료를 누르면 전체 그래프가 다시 보입니다</li>
     <li>노드 편집 칸에서 시작·종료 노드를 정하면 계층, 피라미드, 다이아몬드 정렬의 기준이 됩니다</li>
-    <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양과 색, 체크 강조 색, 선택 강조 색을 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
+    <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양과 색, 선택 강조 색을 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
   </ul>
   <button id="btnHelpClose">닫기</button>
 </dialog>
 
 <dialog id="versionDlg">
   <h2 style="margin-top:0;font-size:17px">그래프 버전 기록</h2>
-  <p class="hint">앱을 열거나 주기를 적용한 때부터 설정한 간격으로 그래프를 확인합니다. 마지막 버전과 달라졌을 때만 전체 스냅샷을 변경이력 폴더에 저장합니다. 이전 버전을 JSON으로 내려받거나 복원할 수 있습니다.</p>
-  <div class="interval-row" aria-label="버전 기록 주기">
-    <label>일<input id="v_days" type="number" min="0" max="3650" step="1"></label>
-    <label>시간<input id="v_hours" type="number" min="0" max="23" step="1"></label>
-    <label>분<input id="v_minutes" type="number" min="0" max="59" step="1"></label>
-    <label>초<input id="v_seconds" type="number" min="0" max="59" step="1"></label>
-  </div>
-  <div id="versionIntervalStatus" class="muted"></div>
-  <button id="btnSaveVersionInterval">저장 주기 적용</button>
+  <p class="hint">버전은 현재 상태 저장을 눌렀을 때 기록됩니다. 그래프를 초기화하거나 JSON을 불러오는 등 현재 내용을 바꾸는 작업 전에는 자동 백업합니다.</p>
   <label>수동 버전 요약 (비워 두면 자동으로 적힙니다)<input id="versionSummary" maxlength="160" placeholder="예: 실행 결과를 반영해 다음 단계를 수정"></label>
   <button id="btnCreateVersion">현재 상태 저장</button>
   <div id="versionList" class="hint" style="margin-top:16px;max-height:45vh;overflow:auto"></div>
@@ -179,9 +153,6 @@
   <div class="cset"><span class="cl">연결선 색</span>
     <div class="crow"><input type="text" id="s_lineColor" maxlength="7" placeholder="#9ca3af"><span class="sw" id="sw_lineColor"></span></div>
     <div class="presets" id="p_lineColor"></div></div>
-  <div class="cset"><span class="cl">체크 강조 색 (체크된 노드와 연결 화살표)</span>
-    <div class="crow"><input type="text" id="s_highlightColor" maxlength="7" placeholder="#2563eb"><span class="sw" id="sw_highlightColor"></span></div>
-    <div class="presets" id="p_highlightColor"></div></div>
   <div class="cset"><span class="cl">선택 강조 색 (현재 선택한 노드 테두리)</span>
     <div class="crow"><input type="text" id="s_selectionColor" maxlength="7" placeholder="#ea580c"><span class="sw" id="sw_selectionColor"></span></div>
     <div class="presets" id="p_selectionColor"></div></div>
@@ -192,7 +163,6 @@
   <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
     <button id="btnPickProject" type="button">JSON 불러오기</button>
     <label class="btn">다른 위치에서 고르기<input type="file" id="file" accept=".json"></label>
-    <button id="btnLoadExample" type="button">예시 가져오기</button>
     <button id="btnSave">JSON 저장</button>
     <button id="btnSettingsDefault">기본값으로</button>
   </div>
@@ -219,20 +189,25 @@
 <script>
 const KEY = 'causal-editor-v3';
 const VERSION_KEY = 'causal-editor-versions-v1';
-const VERSION_INTERVAL_KEY = 'causal-editor-version-interval-v1';
 const SIDEBAR_KEY = 'causal-editor-sidebar-hidden-v1';
-const GRAPH_ACTIVE_KEY = 'causal-editor-active-graph-v1';
 const RECT = {w: 200, h: 110}, CIRCLE = {w: 130, h: 130};
-const DEFAULT_SETTINGS = {shape:'rect', nodeColor:'#ffffff', bgColor:'#fafafa', lineStyle:'curve', lineColor:'#9ca3af', highlightColor:'#2563eb', selectionColor:'#ea580c', canvasPadding:120};
+const DEFAULT_SETTINGS = {shape:'rect', nodeColor:'#ffffff', bgColor:'#fafafa', lineStyle:'curve', lineColor:'#9ca3af', selectionColor:'#ea580c', canvasPadding:120};
 const NODE_FIELDS = [['f_title','title'],['f_now','now'],['f_memo','memo']];
+const NODE_STATUSES = {
+  not_started: {label:'미착수', color:'#94a3b8'},
+  in_progress: {label:'진행 중', color:'#2563eb'},
+  completed: {label:'완료', color:'#16a34a'},
+  on_hold: {label:'보류', color:'#d97706'},
+  stopped: {label:'중단', color:'#64748b'},
+  failed: {label:'실패', color:'#dc2626'}
+};
 const EDGE_FIELDS = [['e_label','label'],['e_memo','memo']];
 const SELECT_CTRL = [['s_shape','shape'],['s_lineStyle','lineStyle']];
-const COLOR_CTRL = ['nodeColor','bgColor','lineColor','highlightColor','selectionColor'];   // 네이티브 색상 창 대신 입력칸 + 색 견본 방식
+const COLOR_CTRL = ['nodeColor','bgColor','lineColor','selectionColor'];   // 네이티브 색상 창 대신 입력칸 + 색 견본 방식
 const PRESETS = {
   nodeColor: ['#ffffff','#f8fafc','#fef9c3','#dcfce7','#dbeafe','#fce7f3'],
   bgColor: ['#fafafa','#f4f5f7','#f5f0e6','#ffffff','#1e293b','#0f172a'],
   lineColor: ['#9ca3af','#6b7280','#475569','#a8a29e','#94a3b8','#cbd5e1'],
-  highlightColor: ['#2563eb','#1d4ed8','#0891b2','#7c3aed','#ea580c','#111827'],
   selectionColor: ['#ea580c','#dc2626','#7c3aed','#0891b2','#db2777','#111827']
 };
 const $ = s => document.querySelector(s);
@@ -243,38 +218,33 @@ const svg = $('#canvas');
 
 let S, sel = {type: null, id: null}, drag = null, pan = null, pendingConnectionSource = null;
 let focusMode = false, focusNodeId = null;
-let GRAPH_LIST = [], activeGraphId = '', graphSaveTimer = null;
+let graphSaveTimer = null;
 let zoom = 1, lastCW = 800, lastCH = 600, viewMinX = 0, viewMinY = 0;   // 확대율과 뷰박스(저장하지 않음)
-let versionTimer = null, versionDueAt = 0, versionIntervalMs = 60 * 60 * 1000;
-let lastVersionSnapshot = '', VERSION_LIST = [];
+let VERSION_LIST = [];
 
 /* ---------- 데이터 ----------
-   노드 = 하나의 상태 (제목, 현재, 메모, 위치, 체크)
-   화살표 = 인과 (원인 노드 → 결과 노드, 설명, 결과 상태)
+   노드 = 하나의 상태 (제목, 진행 상태, 현재 상태, 메모, 위치)
+   화살표 = 인과 (원인 노드 → 결과 노드, 설명, 메모)
    설정(settings)도 데이터와 함께 저장됩니다. */
 function initial() {
   return {nextId: 1, nodes: [], edges: [], settings: {...DEFAULT_SETTINGS}};
 }
-function ensureSettings() { S.settings = Object.assign({}, DEFAULT_SETTINGS, S.settings || {}); }
+function ensureSettings() { S.settings = Object.assign({}, DEFAULT_SETTINGS, S.settings || {}); delete S.settings.highlightColor; }
 function load() { try { const v = localStorage.getItem(KEY); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
   clearTimeout(graphSaveTimer);
-  if (activeGraphId && location.protocol !== 'file:') {
-    const snapshot = JSON.parse(JSON.stringify(S)), id = activeGraphId;
-    graphSaveTimer = setTimeout(() => persistGraph(id, snapshot), 250);
+  if (location.protocol !== 'file:') {
+    const snapshot = JSON.parse(JSON.stringify(S));
+    graphSaveTimer = setTimeout(() => persistGraph(snapshot), 250);
   }
   scheduleMd();
 }
-async function persistGraph(id, data) {
+async function persistGraph(data) {
   try {
-    const r = await fetch(`/api/graphs/${encodeURIComponent(id)}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    const r = await fetch('/api/graph', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
     const j = await r.json();
     if (!r.ok || !j.ok) throw new Error(j.error || '그래프 JSON 저장 실패');
-    const item = {id:j.id, name:j.name, data:JSON.parse(JSON.stringify(data))};
-    const i = GRAPH_LIST.findIndex(g => g.id === id);
-    if (i < 0) GRAPH_LIST.unshift(item); else GRAPH_LIST[i] = item;
-    renderGraphLibrary();
     return true;
   } catch (err) { setFstat(`그래프 JSON 저장 실패: ${err.message}`); return false; }
 }
@@ -303,7 +273,6 @@ async function loadVersions() {
     const refreshed = await fetch('/api/versions');
     VERSION_LIST = (await refreshed.json()).versions || [];
   }
-  lastVersionSnapshot = JSON.stringify(VERSION_LIST[0]?.data ?? S);
 }
 async function createVersion(summary, data = S, force = false) {
   const snapshot = JSON.parse(JSON.stringify(data));
@@ -311,59 +280,9 @@ async function createVersion(summary, data = S, force = false) {
   try {
     const item = await postVersion({summary:summary.trim(), data:snapshot});
     VERSION_LIST.unshift(item);
-    lastVersionSnapshot = JSON.stringify(snapshot);
-    renderGraphLibrary();
     if ($('#versionDlg').open) renderVersions();
     return true;
   } catch (e) { setFstat(`변경 이력 저장 실패: ${e.message}`); return false; }
-}
-function formatVersionInterval(ms) {
-  let seconds = Math.floor(ms / 1000);
-  const days = Math.floor(seconds / 86400); seconds %= 86400;
-  const hours = Math.floor(seconds / 3600); seconds %= 3600;
-  const minutes = Math.floor(seconds / 60); seconds %= 60;
-  return `${days}일 ${hours}시간 ${minutes}분 ${seconds}초`;
-}
-function fillVersionIntervalInputs() {
-  let parts;
-  try { parts = JSON.parse(localStorage.getItem(VERSION_INTERVAL_KEY) || 'null'); } catch (e) {}
-  const ms = Number(parts?.ms);
-  versionIntervalMs = Number.isFinite(ms) && ms >= 1000 ? ms : 60 * 60 * 1000;
-  let left = Math.floor(versionIntervalMs / 1000);
-  $('#v_days').value = Math.floor(left / 86400); left %= 86400;
-  $('#v_hours').value = Math.floor(left / 3600); left %= 3600;
-  $('#v_minutes').value = Math.floor(left / 60); left %= 60;
-  $('#v_seconds').value = left;
-  $('#versionIntervalStatus').textContent = `저장 주기: ${formatVersionInterval(versionIntervalMs)} · 변경이 있을 때만 기록`;
-}
-function applyVersionInterval() {
-  const d = Number($('#v_days').value), h = Number($('#v_hours').value), m = Number($('#v_minutes').value), s = Number($('#v_seconds').value);
-  if (![d,h,m,s].every(Number.isInteger) || d < 0 || d > 3650 || h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59) {
-    alert('일은 0~3650, 시간은 0~23, 분과 초는 0~59 사이의 정수로 입력해 주세요.'); return;
-  }
-  const ms = (((d * 24 + h) * 60 + m) * 60 + s) * 1000;
-  if (ms < 1000) { alert('저장 주기는 최소 1초로 설정해 주세요.'); return; }
-  versionIntervalMs = ms;
-  try { localStorage.setItem(VERSION_INTERVAL_KEY, JSON.stringify({ms})); }
-  catch (e) { alert('저장 주기 설정을 보관하지 못했습니다.'); return; }
-  scheduleVersionCheck(true);
-  fillVersionIntervalInputs();
-}
-function scheduleVersionCheck(reset = false) {
-  clearTimeout(versionTimer);
-  if (!S || !lastVersionSnapshot) return;
-  if (reset || !versionDueAt) versionDueAt = Date.now() + versionIntervalMs;
-  const wait = Math.max(0, Math.min(versionDueAt - Date.now(), 2147483647));
-  versionTimer = setTimeout(async () => {
-    if (Date.now() < versionDueAt) { scheduleVersionCheck(); return; }
-    const snapshot = JSON.stringify(S);
-    if (snapshot !== lastVersionSnapshot) {
-      const ok = await createVersion(`주기 자동 기록 · 노드 ${S.nodes.length}개, 화살표 ${S.edges.length}개`, S);
-      if (!ok) { versionDueAt = Date.now() + Math.max(60 * 1000, Math.min(5 * 60 * 1000, versionIntervalMs)); scheduleVersionCheck(); return; }
-    }
-    versionDueAt = Date.now() + versionIntervalMs;
-    scheduleVersionCheck();
-  }, wait);
 }
 function renderVersions() {
   const list = versions(), box = $('#versionList');
@@ -374,7 +293,6 @@ function renderVersions() {
 async function deleteVersionsBulk(ids) {
   if (!ids.length) { alert('삭제할 버전을 체크하세요.'); return; }
   if (!confirm(`체크한 버전 ${ids.length}개를 삭제할까요? 삭제한 버전 파일은 복구할 수 없습니다.`)) return;
-  const latestId = VERSION_LIST[0]?.id;
   let failed = 0;
   for (const id of ids) {
     try {
@@ -384,162 +302,47 @@ async function deleteVersionsBulk(ids) {
       VERSION_LIST = VERSION_LIST.filter(item => item.id !== id);
     } catch (err) { failed++; }
   }
-  if (ids.includes(latestId)) lastVersionSnapshot = JSON.stringify(VERSION_LIST[0]?.data ?? S);
-  renderVersions(); renderGraphLibrary();
+  renderVersions();
   setFstat(`버전 ${ids.length - failed}개를 삭제했습니다${failed ? ` (실패 ${failed}개)` : ''}.`);
 }
 
-function sameGraph(a, b) {
-  return JSON.stringify(a?.nodes || []) === JSON.stringify(b?.nodes || []) && JSON.stringify(a?.edges || []) === JSON.stringify(b?.edges || []);
+async function loadSavedGraph(localData) {
+  const legacyId = localStorage.getItem('causal-editor-active-graph-v1') || '';
+  const r = await fetch(`/api/graph?legacy=${encodeURIComponent(legacyId)}`), j = await r.json();
+  if (!r.ok || !j.ok) throw new Error(j.error || '그래프를 읽지 못했습니다.');
+  const serverData = j.data;
+  const localHasContent = !!(localData?.nodes?.length || localData?.edges?.length);
+  S = localHasContent || !serverData ? (localData || initial()) : serverData;
+  S.edges = S.edges || []; S.nextId = S.nextId || 1;
+  normalizeNodeStatuses(); ensureSettings();
+  localStorage.removeItem('causal-editor-active-graph-v1');
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  await persistGraph(S);
+  await syncNodeFiles();
+  render(); renderPanel(); renderSettings();
 }
 
-async function backUpBrowserGraphIfNeeded() {
-  if (!S.nodes.length && !S.edges.length) return true;
-  try {
-    const r = await fetch('/api/versions'), j = await r.json();
-    if (!r.ok || !j.ok) throw new Error(j.error || '변경 이력을 읽지 못했습니다.');
-    if ((j.versions || []).some(v => sameGraph(v.data, S))) return true;
-    const saved = await postVersion({summary:'폴더 그래프 전환 전 브라우저 상태 백업', data:JSON.parse(JSON.stringify(S))});
-    VERSION_LIST.unshift(saved); renderVersions();
-    return true;
-  } catch (err) {
-    setFstat(`브라우저 그래프 백업 실패: ${err.message}`);
-    return false;
-  }
-}
-
-async function loadGraphFolders() {
-  const r = await fetch('/api/graphs'), j = await r.json();
-  if (!r.ok || !j.ok) throw new Error(j.error || '그래프 폴더를 읽지 못했습니다.');
-  GRAPH_LIST = j.graphs || [];
-  const remembered = localStorage.getItem(GRAPH_ACTIVE_KEY);
-  const rememberedGraph = GRAPH_LIST.find(g => g.id === remembered);
-  if (rememberedGraph) {
-    activeGraphId = remembered;
-    if (!sameGraph(rememberedGraph.data, S)) {
-      if (!await backUpBrowserGraphIfNeeded()) throw new Error('브라우저 데이터 백업에 실패해 폴더 그래프를 불러오지 않았습니다.');
-      await applyGraph(rememberedGraph.data, rememberedGraph.id);
-    }
-  } else {
-    const match = GRAPH_LIST.find(g => sameGraph(g.data, S));
-    if (match) activeGraphId = match.id;
-    else if (!remembered && !S.nodes.length && !S.edges.length && GRAPH_LIST.some(g => g.id === '내_계획' && g.data.nodes.length)) {
-      const personal = GRAPH_LIST.find(g => g.id === '내_계획');
-      await applyGraph(personal.data, personal.id);
-    }
-    else {
-      // 브라우저의 임시 상태와 폴더 JSON이 다르면 어느 쪽도 덮어쓰지 않고 임시 그래프로 보존합니다.
-      activeGraphId = `복구_그래프_${Date.now()}`;
-      await persistGraph(activeGraphId, S);
-    }
-    localStorage.setItem(GRAPH_ACTIVE_KEY, activeGraphId);
-  }
-  renderGraphLibrary();
-  syncNodeFiles();
-}
-
-function renderGraphLibrary() {
-  const box = $('#graphList');
-  if (!box) return;
-  box.replaceChildren();
-  if (!GRAPH_LIST.length) { box.textContent = '그래프 JSON이 들어 있는 폴더가 없습니다.'; return; }
-  for (const graph of GRAPH_LIST) {
-    const row = document.createElement('div');
-    row.className = 'graph-row';
-    const button = document.createElement('button');
-    button.type = 'button'; button.className = 'graph-choice';
-    if (graph.id === activeGraphId) button.classList.add('active');
-    button.textContent = graph.name.replaceAll('_', ' ');
-    button.addEventListener('click', () => loadGraphFolder(graph.id));
-    const pick = document.createElement('input');
-    pick.type = 'checkbox'; pick.className = 'merge-pick'; pick.value = graph.id; pick.title = '합치기 대상으로 고르기';
-    const rename = document.createElement('button');
-    rename.type = 'button'; rename.textContent = '이름'; rename.title = '그래프 이름 바꾸기';
-    rename.addEventListener('click', () => renameGraph(graph.id));
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.textContent = '삭제';
-    del.disabled = graph.id === activeGraphId;
-    del.title = graph.id === activeGraphId ? '현재 열린 그래프는 삭제할 수 없습니다' : '이 그래프를 삭제합니다 (복구 가능)';
-    del.addEventListener('click', () => deleteGraphFolder(graph.id));
-    row.append(pick, button, rename, del);
-    box.appendChild(row);
-  }
-}
-
-async function deleteGraphFolder(id) {
-  const graph = GRAPH_LIST.find(g => g.id === id);
-  if (!graph) return;
-  if (id === activeGraphId) { alert('현재 열려 있는 그래프는 삭제할 수 없습니다. 다른 그래프로 바꾼 뒤 삭제하세요.'); return; }
-  const name = graph.name.replaceAll('_', ' ');
-  if (!confirm(`'${name}' 그래프를 삭제할까요?\n폴더는 변경이력 폴더의 '삭제된_그래프'로 옮겨져 나중에 복구할 수 있습니다.`)) return;
-  try {
-    const r = await fetch(`/api/graphs/${encodeURIComponent(id)}`, {method: 'DELETE'});
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error);
-    GRAPH_LIST = GRAPH_LIST.filter(g => g.id !== id);
-    renderGraphLibrary();
-    setFstat(`그래프를 삭제했습니다: ${name}`);
-  } catch (err) {
-    alert(`그래프 삭제 실패: ${err.message}`);
-  }
-}
-
-async function prepareGraphSwitch() {
-  if (!confirm('현재 그래프를 변경 이력에 보관한 뒤 선택한 그래프로 전환할까요?')) return false;
-  if (!await createVersion('그래프 전환 전 자동 백업')) {
-    alert('현재 그래프를 변경이력에 백업하지 못해 전환을 취소했습니다.');
-    return false;
-  }
-  return true;
-}
-
-async function applyGraph(data, graphId = activeGraphId) {
+async function applyGraph(data) {
   S = JSON.parse(JSON.stringify(data));
-  S.edges = S.edges || []; S.nextId = S.nextId || 100;
-  ensureSettings();
-  activeGraphId = graphId;
-  try { localStorage.setItem(GRAPH_ACTIVE_KEY, activeGraphId); } catch (e) {}
+  S.edges = S.edges || []; S.nextId = S.nextId || 1;
+  normalizeNodeStatuses(); ensureSettings();
   focusMode = false; focusNodeId = null;
   $('#btnFocus').textContent = '포커스 모드';
   $('#btnFocus').setAttribute('aria-pressed', 'false');
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
-  scheduleMd();
-  if (activeGraphId) await persistGraph(activeGraphId, S);
-  lastVersionSnapshot = JSON.stringify(S);
-  select(null, null); renderSettings(); fitView(); renderGraphLibrary();
+  clearTimeout(graphSaveTimer);
+  await persistGraph(S);
+  await syncNodeFiles();
+  select(null, null); renderSettings(); fitView();
 }
-
-async function loadGraphFolder(id) {
-  const graph = GRAPH_LIST.find(g => g.id === id);
-  if (!graph || id === activeGraphId) return;
-  if (!await prepareGraphSwitch()) return;
-  await applyGraph(graph.data, graph.id);
-  $('#graphDlg').close();
-  setFstat(`그래프를 불러왔습니다: ${graph.name.replaceAll('_', ' ')}`);
-}
-
-async function loadSampleGraph() {
-  if (!await prepareGraphSwitch()) return;
-  try {
-    const r = await fetch('/api/sample'), data = await r.json();
-    if (!r.ok || !Array.isArray(data.nodes)) throw new Error(data.error || '예시 파일을 읽지 못했습니다.');
-    const id = '부자되기_예시';
-    await applyGraph(data, id);
-    await createVersion('부자 되기 예시 다시 불러옴');
-    setFstat('저장소의 원본 예시를 불러왔습니다. 예시 파일 자체는 수정되지 않았습니다.');
-  } catch (err) { alert(`예시 불러오기 실패: ${err.message}`); }
-}
-
-async function loadGraphVersion(id) {
-  const v = VERSION_LIST.find(item => item.id === id);
-  if (!v || !await prepareGraphSwitch()) return;
-  await applyGraph(v.data);
-  setFstat(`그래프를 불러왔습니다: ${v.summary || new Date(v.at).toLocaleString()}`);
-}
-
 const node = id => S.nodes.find(n => n.id === id);
 const edge = id => S.edges.find(e => e.id === id);
+function normalizeNodeStatuses() {
+  for (const n of S.nodes || []) {
+    if (!NODE_STATUSES[n.status]) n.status = 'not_started';
+    delete n.checked;
+  }
+}
 const startNodes = () => S.nodes.filter(n => n.kind === 'start');
 const goalNodes = () => S.nodes.filter(n => n.kind === 'goal');
 const dims = () => S.settings.shape === 'circle' ? CIRCLE : RECT;
@@ -569,7 +372,7 @@ function analyze() {
 
 /* ---------- 렌더링 ---------- */
 function render() {
-  const g = analyze(), st = S.settings, D = dims(), W = D.w, H = D.h, checkColor = st.highlightColor, selectionColor = st.selectionColor;
+  const g = analyze(), st = S.settings, D = dims(), W = D.w, H = D.h, selectionColor = st.selectionColor;
   if (focusNodeId && !node(focusNodeId)) focusNodeId = null;
   const visibleNodeIds = new Set(S.nodes.map(n => n.id));
   if (focusMode && focusNodeId) {
@@ -595,10 +398,8 @@ function render() {
       const dx = Math.max(40, Math.abs(x2 - x1) / 2) * (forward ? 1 : -1);
       d = `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
     }
-    const hi = !!(a.checked && b.checked);   // 양 끝 노드가 모두 체크된 화살표만 강조 색
-    const color = hi ? checkColor : st.lineColor;
-    // 강조는 체크된 것만: 양 끝이 모두 체크된 화살표만 굵고 강조 색, 나머지는 가는 일반 선
-    const w = (hi ? 4 : 1) + (sel.type === 'edge' && sel.id === e.id ? 2 : 0);
+    const color = st.lineColor;
+    const w = 1 + (sel.type === 'edge' && sel.id === e.id ? 2 : 0);
     h += `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" marker-end="url(#arr)"/>`;
     const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 8;
     const tag = e.label ? trunc(e.label, 16) : '';
@@ -610,25 +411,23 @@ function render() {
     if (!visibleNodeIds.has(n.id)) continue;
     const isSel = sel.type === 'node' && sel.id === n.id;
     const fill = n.kind === 'start' ? '#ecfdf5' : n.kind === 'goal' ? '#fef2f2' : st.nodeColor;
-    const stroke = isSel ? selectionColor : n.checked ? checkColor : '#94a3b8';
-    const sw = isSel || n.checked ? 4 : 2;
-    let body, cbx, cby;
+    const status = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
+    const stroke = isSel ? selectionColor : status.color;
+    const sw = isSel ? 4 : 3;
+    let body;
     if (st.shape === 'circle') {
       body = `<circle cx="${W / 2}" cy="${H / 2}" r="${W / 2 - 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
         <text x="${W / 2}" y="${H / 2 - 6}" font-size="13" font-weight="700" fill="#222" text-anchor="middle">${esc(trunc(n.title, 10))}</text>
-        <text x="${W / 2}" y="${H / 2 + 12}" font-size="11" fill="#333" text-anchor="middle">${esc(trunc(n.now, 12))}</text>`;
-      cbx = Math.round(W * 0.854 - 8); cby = Math.round(H * 0.146 - 8);
+        <text x="${W / 2}" y="${H / 2 + 12}" font-size="11" fill="#333" text-anchor="middle">${esc(trunc(n.now, 12))}</text>
+        <text x="${W / 2}" y="${H / 2 + 34}" font-size="10" font-weight="700" fill="${status.color}" text-anchor="middle">${status.label}</text>`;
     } else {
       body = `<rect width="${W}" height="${H}" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
         <text x="10" y="24" font-size="14" font-weight="700" fill="#222">${esc(trunc(n.title, 16))}</text>
-        <text x="10" y="50" font-size="12" fill="#333">${esc(trunc(n.now, 22))}</text>`;
-      cbx = W - 24; cby = 8;
+        <text x="10" y="50" font-size="12" fill="#333">${esc(trunc(n.now, 22))}</text>
+        <rect x="10" y="72" width="${status.label.length * 13 + 14}" height="22" rx="11" fill="${status.color}" fill-opacity=".14"/>
+        <text x="17" y="87" font-size="11" font-weight="700" fill="${status.color}">${status.label}</text>`;
     }
-    h += `<g data-node="${n.id}" transform="translate(${n.x},${n.y})" style="cursor:move">${body}
-      <g data-check="${n.id}" transform="translate(${cbx},${cby})" style="cursor:pointer">
-        <rect width="16" height="16" rx="3" fill="#fff" stroke="${n.checked ? checkColor : '#64748b'}" stroke-width="1.5"/>
-        ${n.checked ? `<path d="M3,8 L7,12 L13,4" fill="none" stroke="${checkColor}" stroke-width="2.5"/>` : ''}
-      </g></g>`;
+    h += `<g data-node="${n.id}" transform="translate(${n.x},${n.y})" style="cursor:move">${body}</g>`;
   }
   // 캔버스 크기: 노드가 모두 들어갈 만큼 키우고, 확대/축소 비율을 적용
   const padding = Math.max(0, Math.min(1000, Number(st.canvasPadding) || 0));
@@ -658,7 +457,7 @@ function renderPanel() {
     $('#nodeKind').textContent = n.kind === 'start' ? '시작 노드' : n.kind === 'goal' ? '종료 노드' : '일반 노드';
     for (const [id, key] of NODE_FIELDS) $('#' + id).value = n[key] ?? '';
     $('#f_kind').value = n.kind || 'normal';
-    $('#f_checked').checked = !!n.checked;
+    $('#f_status').value = n.status || 'not_started';
   }
   if (e) {
     $('#edgeText').textContent = `${node(e.from).title} → ${node(e.to).title}`;
@@ -708,7 +507,7 @@ function freeNodeId() {
 
 function addNode(x, y) {
   const id = freeNodeId();
-  S.nodes.push({id, kind:'normal', title:'새 노드', now:'', x: Math.max(0, x), y: Math.max(0, y), memo:''});
+  S.nodes.push({id, kind:'normal', status:'not_started', title:'새 노드', now:'', x: Math.max(0, x), y: Math.max(0, y), memo:''});
   save(); select('node', id);
 }
 
@@ -755,12 +554,13 @@ function enumeratePaths(limit) {
   return out;
 }
 
-const fileName = n => `${n.id}_${(n.title || '노드').replace(/[\\/:*?"<>|\s]+/g, '_')}.md`;
+const fileName = n => `n${n.id.slice(1).padStart(4, '0')}_${(n.title || '노드').replace(/[\\/:*?"<>|\s]+/g, '_')}.md`;
 const linkTo = n => `[${n.title}](${encodeURI(fileName(n))})`;
 
 function nodeMd(n) {
   const kind = n.kind === 'start' ? ' (시작)' : n.kind === 'goal' ? ' (종료)' : '';
-  const L = [`# ${n.title}${kind}`, '', '## 현재', '', n.now || '_(비어 있음)_', ''];
+  const status = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
+  const L = [`# ${n.title}${kind}`, '', `## 진행 상태`, '', status.label, '', '## 현재 상태', '', n.now || '_(비어 있음)_', ''];
   if (n.memo) L.push('## 메모', '', n.memo, '');
 
   const incoming = S.edges.filter(e => e.to === n.id);
@@ -816,7 +616,7 @@ async function syncNodeFiles() {
     const r = await fetch('/api/nodes', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({graphId:activeGraphId, files})
+      body: JSON.stringify({files})
     });
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
@@ -943,10 +743,6 @@ $('#stage').addEventListener('contextmenu', e => {
       select('node', id);
       setFstat('연결할 결과 노드를 클릭하세요. Esc를 누르면 취소됩니다.');
     });
-    addCanvasMenuAction(node(id)?.checked ? '체크 해제' : '체크 표시', () => {
-      const n = node(id); if (!n) return;
-      n.checked = !n.checked; save(); render(); renderPanel();
-    });
     addCanvasMenuAction('노드 삭제', () => { select('node', id); deleteSelected(); }, true);
   } else if (edgeTarget) {
     const id = edgeTarget.dataset.edge;
@@ -977,12 +773,6 @@ $('#stage').addEventListener('scroll', closeCanvasMenu, {passive:true});
 
 $('#stage').addEventListener('mousedown', e => {
   if (e.button !== 0) return;
-  const ck = e.target.closest('[data-check]');
-  if (ck) {                                   // 체크박스 클릭: 토글만 하고 선택은 바꾸지 않음
-    const n = node(ck.dataset.check);
-    n.checked = !n.checked; save(); render(); renderPanel();
-    return;
-  }
   const ng = e.target.closest('[data-node]'), eg = e.target.closest('[data-edge]');
   if (ng) {
     const id = ng.dataset.node;
@@ -1040,9 +830,9 @@ $('#f_kind').addEventListener('change', e => {
   const k = e.target.value;
   n.kind = k; save(); render(); renderPanel();
 });
-$('#f_checked').addEventListener('change', e => {
+$('#f_status').addEventListener('change', e => {
   const n = node(sel.id); if (!n) return;
-  n.checked = e.target.checked; save(); render();
+  n.status = NODE_STATUSES[e.target.value] ? e.target.value : 'not_started'; save(); render();
 });
 
 SELECT_CTRL.forEach(([id, key]) => $('#' + id).addEventListener('change', e => {
@@ -1084,84 +874,11 @@ $('#stage').addEventListener('wheel', e => {
 $('#btnFocus').onclick = toggleFocusMode;
 $('#btnSidebar').onclick = () => setSidebarVisible($('aside').hidden, true);
 $('#btnSettings').onclick = () => { renderSettings(); $('#setDlg').showModal(); };
-$('#btnVersions').onclick = () => { fillVersionIntervalInputs(); renderVersions(); $('#versionDlg').showModal(); };
+$('#btnVersions').onclick = () => { renderVersions(); $('#versionDlg').showModal(); };
 $('#btnVersionClose').onclick = () => $('#versionDlg').close();
-async function renameGraph(id) {
-  const graph = GRAPH_LIST.find(g => g.id === id);
-  if (!graph) return;
-  const input = prompt('새 이름을 입력하세요. 한글, 영문, 숫자, _, - 만 쓸 수 있고 띄어쓰기는 _로 바뀝니다.', graph.name.replaceAll('_', ' '));
-  if (input === null) return;
-  const name = input.trim().replace(/\s+/g, '_');
-  if (!name || name === graph.id) return;
-  try {
-    if (id === activeGraphId) { clearTimeout(graphSaveTimer); await persistGraph(id, S); }
-    const r = await fetch(`/api/graphs/${encodeURIComponent(id)}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})});
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error);
-    GRAPH_LIST = GRAPH_LIST.map(g => g.id === id ? {...g, id: d.id, name: d.name} : g);
-    if (id === activeGraphId) {
-      activeGraphId = d.id;
-      try { localStorage.setItem(GRAPH_ACTIVE_KEY, activeGraphId); } catch (e) {}
-    }
-    renderGraphLibrary();
-    setFstat(`그래프 이름을 바꿨습니다: ${d.name.replaceAll('_', ' ')}`);
-  } catch (err) {
-    alert(`이름 바꾸기 실패: ${err.message}`);
-  }
-}
-
-// 여러 그래프의 노드와 화살표를 하나로 모읍니다. 번호는 새로 매기고, 그래프끼리 겹치지 않게 옆으로 밀어 배치합니다.
-function mergeGraphData(list) {
-  const out = {nextId: 1, settings: JSON.parse(JSON.stringify(list[0].settings || S.settings)), nodes: [], edges: []};
-  let next = 1, edgeNext = 1, offsetX = 0;
-  for (const data of list) {
-    const map = new Map();
-    let maxX = 0;
-    for (const n of data.nodes || []) {
-      const newId = `n${next++}`;
-      map.set(n.id, newId);
-      const x = (Number(n.x) || 0) + offsetX;
-      maxX = Math.max(maxX, x);
-      out.nodes.push({...n, id: newId, x, kind: n.kind || 'normal'});
-    }
-    for (const e of data.edges || []) {
-      if (!map.has(e.from) || !map.has(e.to)) continue;
-      out.edges.push({...e, id: `e${edgeNext++}`, from: map.get(e.from), to: map.get(e.to)});
-    }
-    offsetX = maxX + 300;
-  }
-  out.nextId = next;
-  return out;
-}
-
-async function mergeSelectedGraphs() {
-  const ids = [...document.querySelectorAll('.merge-pick:checked')].map(c => c.value);
-  if (ids.length < 2) { alert('합칠 그래프를 2개 이상 체크하세요.'); return; }
-  const sources = ids.map(id => {
-    const g = GRAPH_LIST.find(x => x.id === id);
-    return g ? {name: g.name, data: id === activeGraphId ? S : g.data} : null;
-  }).filter(Boolean);
-  let id = ($('#mergeName').value.trim() || '합친_그래프').normalize('NFKC').replace(/[^\p{L}\p{N}_-]+/gu, '_').replace(/^_+|_+$/g, '').slice(0, 70) || '합친_그래프';
-  if (GRAPH_LIST.some(g => g.id === id)) id += `_${Date.now().toString().slice(-6)}`;
-  if (!confirm(`그래프 ${sources.length}개를 합쳐 '${id.replaceAll('_', ' ')}'을(를) 새로 만들까요?\n원래 그래프는 그대로 남습니다.`)) return;
-  try {
-    if (activeGraphId) { clearTimeout(graphSaveTimer); await persistGraph(activeGraphId, S); }
-    const merged = mergeGraphData(sources.map(s => s.data));
-    await persistGraph(id, merged);
-    document.querySelectorAll('.merge-pick').forEach(c => c.checked = false);
-    setFstat(`그래프를 합쳤습니다: ${id.replaceAll('_', ' ')} (노드 ${merged.nodes.length}개, 화살표 ${merged.edges.length}개)`);
-  } catch (err) {
-    alert(`그래프 합치기 실패: ${err.message}`);
-  }
-}
-$('#btnMerge').onclick = mergeSelectedGraphs;
-$('#btnGraphs').onclick = () => { renderGraphLibrary(); $('#graphDlg').showModal(); };
-$('#btnGraphClose').onclick = () => $('#graphDlg').close();
-$('#btnSaveVersionInterval').onclick = applyVersionInterval;
 $('#btnCreateVersion').onclick = async () => {
   const input = $('#versionSummary');
-  const graphName = (GRAPH_LIST.find(g => g.id === activeGraphId)?.name || activeGraphId || '').replaceAll('_', ' ');
-  const auto = `${graphName ? `[${graphName}] ` : ''}수동 저장 · 노드 ${S.nodes.length}개, 화살표 ${S.edges.length}개 · ${new Date().toLocaleString()}`;
+  const auto = `수동 저장 · 노드 ${S.nodes.length}개, 화살표 ${S.edges.length}개 · ${new Date().toLocaleString()}`;
   const summary = input.value.trim() || auto;
   if (await createVersion(summary, S, true)) { input.value = ''; renderVersions(); setFstat('현재 상태를 저장했습니다.'); }
 };
@@ -1192,10 +909,8 @@ $('#versionList').addEventListener('click', async e => {
       const r = await fetch(`/api/versions/${encodeURIComponent(v.id)}`, {method:'DELETE'});
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error || '삭제하지 못했습니다.');
-      const wasLatest = VERSION_LIST[0]?.id === v.id;
       VERSION_LIST = VERSION_LIST.filter(item => item.id !== v.id);
-      if (wasLatest) lastVersionSnapshot = JSON.stringify(VERSION_LIST[0]?.data ?? S);
-      renderVersions(); renderGraphLibrary();
+      renderVersions();
     } catch (err) { setFstat(`버전 삭제 실패: ${err.message}`); }
   }
 });
@@ -1248,22 +963,17 @@ $('#btnDataFolderDefault').onclick = () => saveDataFolder('');
 loadDataFolderSetting();
 $('#btnSave').onclick = () => download('causal-editor.json', JSON.stringify(S, null, 2), 'application/json');
 
-$('#btnLoadExample').onclick = loadSampleGraph;
-
-async function importGraphFile(name, text) {
+async function importGraphFile(text) {
   const o = JSON.parse(text);
   if (!Array.isArray(o.nodes)) throw new Error('bad');
   if (!await createVersion('JSON 불러오기 전 자동 백업')) throw new Error('현재 상태를 변경이력 폴더에 백업하지 못했습니다.');
-  let id = name.replace(/\.json$/i, '').normalize('NFKC').replace(/[^\p{L}\p{N}_-]+/gu, '_').replace(/^_+|_+$/g, '').slice(0, 70);
-  if (!id) id = `가져온_그래프_${Date.now()}`;
-  if (GRAPH_LIST.some(g => g.id === id)) id += `_${Date.now().toString().slice(-6)}`;
-  await applyGraph(o, id);
+  await applyGraph(o);
   await createVersion('JSON 파일 불러옴');
 }
 
 $('#file').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
-  try { await importGraphFile(f.name, await f.text()); }
+  try { await importGraphFile(await f.text()); }
   catch (err) { alert(`JSON 불러오기 실패: ${err.message}`); }
   e.target.value = '';
 });
@@ -1289,7 +999,7 @@ $('#btnPickProject').onclick = async () => {
           if (!rr.ok) throw new Error('파일을 읽지 못했습니다.');
           const text = await rr.text();
           $('#pickDlg').close();
-          await importGraphFile(rel.split('/').pop(), text);
+          await importGraphFile(text);
         } catch (err) { alert(`JSON 불러오기 실패: ${err.message}`); }
       };
       list.appendChild(b);
@@ -1312,7 +1022,7 @@ $('#btnOpenMd').onclick = async () => {
   const n = node(sel.id); if (!n) return;
   if (location.protocol === 'file:') { setFstat('서버 없이 열렸습니다. 실행.bat으로 연 페이지에서 눌러 주세요.'); return; }
   try {
-    const r = await fetch('/api/open', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({graphId:activeGraphId, name: fileName(n)})});
+    const r = await fetch('/api/open', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: fileName(n)})});
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     setFstat(`${fileName(n)} 을 열었습니다.`);
@@ -1326,11 +1036,9 @@ $('#btnReset').onclick = async () => {
   if (!await createVersion('초기화 전 자동 백업')) { alert('현재 상태를 변경이력 폴더에 백업하지 못해 초기화를 취소했습니다.'); return; }
   const keep = S.settings;
   S = initial(); S.settings = keep;
-  activeGraphId = `새_그래프_${Date.now()}`;
-  try { localStorage.setItem(GRAPH_ACTIVE_KEY, activeGraphId); } catch (e) {}
-  await applyGraph(S, activeGraphId);
+  await applyGraph(S);
   await createVersion('그래프 초기화');
-  setFstat('새 빈 그래프를 만들었습니다. 이전 그래프는 오른쪽 그래프 목록에서 다시 열 수 있습니다.');
+  setFstat('새 빈 그래프로 초기화했습니다. 이전 상태는 버전 기록에 보관했습니다.');
 };
 
 document.addEventListener('keydown', e => {
@@ -1343,17 +1051,18 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
 });
 /* ---------- 시작 ---------- */
-S = load() || initial();
+const browserData = load();
+S = browserData || initial();
+normalizeNodeStatuses();
 if (!S.nextId) S.nextId = 10;
 ensureSettings();
 let sidebarHiddenAtLoad = false;
 try { sidebarHiddenAtLoad = localStorage.getItem(SIDEBAR_KEY) === '1'; } catch (e) {}
 setSidebarVisible(!sidebarHiddenAtLoad);
-fillVersionIntervalInputs();
 buildPresets();
 render(); renderPanel();
-loadVersions().then(() => { renderVersions(); scheduleVersionCheck(true); }).catch(err => setFstat(`변경 이력 폴더에 접근할 수 없습니다: ${err.message}`));
-loadGraphFolders().catch(err => setFstat(`그래프 폴더를 읽지 못했습니다: ${err.message}`));
+loadVersions().then(() => { renderVersions(); }).catch(err => setFstat(`변경 이력 폴더에 접근할 수 없습니다: ${err.message}`));
+loadSavedGraph(browserData).catch(err => setFstat(`그래프를 읽지 못했습니다: ${err.message}`));
 </script>
 </body>
 </html>

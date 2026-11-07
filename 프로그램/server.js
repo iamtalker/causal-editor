@@ -24,6 +24,7 @@ function readDataFolder() {
 }
 const DATA_DIR = readDataFolder();
 const NODE_DIR = path.join(DATA_DIR, '노드파일');
+const GRAPH_FILE = path.join(NODE_DIR, '그래프.json');
 const HISTORY_DIR = path.join(DATA_DIR, '변경이력');
 // 이 프로그램이 만든 파일 이름 패턴: n1_제목.md, n12_제목.md, _경로.md
 const OWN_FILE = /^(n\d+_.*|_경로)\.md$/;
@@ -46,91 +47,55 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.method === 'GET' && req.url === '/api/sample') {
-    try {
-      const samplePath = path.join(ROOT, '샘플', '샘플_부자되기.json');
-      const sample = fs.readFileSync(samplePath, 'utf8');
-      JSON.parse(sample); // 손상된 샘플은 그래프에 적용하지 않도록 확인
-      res.writeHead(200, {'Content-Type': 'application/json; charset=utf-8'});
-      res.end(sample);
-    } catch (err) { sendJson(res, 500, {ok: false, error: '부자 되기 예시를 읽지 못했습니다.'}); }
-    return;
-  }
-
-  if (req.method === 'GET' && req.url === '/api/graphs') {
+  if (req.method === 'GET' && (req.url === '/api/graph' || req.url.startsWith('/api/graph?'))) {
     try {
       fs.mkdirSync(NODE_DIR, {recursive: true});
-      const graphs = [];
-      for (const entry of fs.readdirSync(NODE_DIR, {withFileTypes: true})) {
-        if (!entry.isDirectory() || !GRAPH_ID.test(entry.name)) continue;
-        const jsonName = `${entry.name}.json`, fullDir = path.join(NODE_DIR, entry.name);
-        const fullJson = path.join(fullDir, jsonName);
-        if (!fs.existsSync(fullJson)) continue;
-        try {
-          const data = JSON.parse(fs.readFileSync(fullJson, 'utf8'));
-          if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) continue;
-          graphs.push({id: entry.name, name: path.basename(jsonName, '.json'), data});
-        } catch {}
+      if (fs.existsSync(GRAPH_FILE)) {
+        return sendJson(res, 200, {ok: true, data: JSON.parse(fs.readFileSync(GRAPH_FILE, 'utf8'))});
       }
-      graphs.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-      return sendJson(res, 200, {ok: true, graphs});
+      const legacyId = new URL(req.url, 'http://localhost').searchParams.get('legacy') || '';
+      let legacyFile = '';
+      if (GRAPH_ID.test(legacyId)) {
+        const candidate = path.join(NODE_DIR, legacyId, `${legacyId}.json`);
+        if (fs.existsSync(candidate)) legacyFile = candidate;
+      }
+      if (!legacyFile) {
+        const candidates = fs.readdirSync(NODE_DIR, {withFileTypes: true})
+          .filter(entry => entry.isDirectory() && GRAPH_ID.test(entry.name))
+          .map(entry => path.join(NODE_DIR, entry.name, `${entry.name}.json`))
+          .filter(file => fs.existsSync(file))
+          .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+        legacyFile = candidates[0] || '';
+      }
+      if (!legacyFile) return sendJson(res, 200, {ok: true, data: null});
+      const data = JSON.parse(fs.readFileSync(legacyFile, 'utf8'));
+      if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) throw new Error('기존 그래프 파일이 올바르지 않습니다.');
+      return sendJson(res, 200, {ok: true, data});
     } catch (err) { return sendJson(res, 500, {ok: false, error: err.message}); }
   }
 
-  const graphMatch = req.url.match(/^\/api\/graphs\/([^/?]+)$/);
-  // 그래프 삭제: 폴더를 바로 지우지 않고 변경이력/삭제된_그래프로 옮겨 복구할 수 있게 합니다.
-  if (req.method === 'DELETE' && graphMatch) {
-    let id;
-    try { id = decodeURIComponent(graphMatch[1]); } catch { return sendJson(res, 400, {ok: false, error: '잘못된 그래프 폴더 이름입니다.'}); }
-    if (!GRAPH_ID.test(id)) return sendJson(res, 400, {ok: false, error: '잘못된 그래프 폴더 이름입니다.'});
-    const src = path.join(NODE_DIR, id);
-    if (!fs.existsSync(path.join(src, `${id}.json`))) return sendJson(res, 404, {ok: false, error: '그래프 폴더를 찾지 못했습니다.'});
-    try {
-      const trashDir = path.join(HISTORY_DIR, '삭제된_그래프');
-      const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-      fs.mkdirSync(trashDir, {recursive: true});
-      const dest = path.join(trashDir, `${id}_${stamp}`);
-      fs.renameSync(src, dest);
-      return sendJson(res, 200, {ok: true, movedTo: path.relative(ROOT, dest)});
-    } catch (err) { return sendJson(res, 500, {ok: false, error: err.message}); }
-  }
-
-  // 그래프 이름 바꾸기: 폴더와 그래프 JSON 파일 이름을 함께 바꿉니다.
-  if (req.method === 'PATCH' && graphMatch) {
-    let id;
-    try { id = decodeURIComponent(graphMatch[1]); } catch { return sendJson(res, 400, {ok: false, error: '잘못된 그래프 폴더 이름입니다.'}); }
-    if (!GRAPH_ID.test(id)) return sendJson(res, 400, {ok: false, error: '잘못된 그래프 폴더 이름입니다.'});
-    readBody(req).then(body => {
-      const {name} = JSON.parse(body);
-      const to = String(name || '').normalize('NFKC').replace(/[^\p{L}\p{N}_-]+/gu, '_').replace(/^_+|_+$/g, '').slice(0, 70);
-      if (!GRAPH_ID.test(to)) throw new Error('이름에는 한글, 영문, 숫자, _, - 만 쓸 수 있습니다.');
-      const src = path.join(NODE_DIR, id), dst = path.join(NODE_DIR, to);
-      if (!fs.existsSync(path.join(src, `${id}.json`))) return sendJson(res, 404, {ok: false, error: '그래프 폴더를 찾지 못했습니다.'});
-      if (to !== id) {
-        if (fs.existsSync(dst)) return sendJson(res, 409, {ok: false, error: '같은 이름의 그래프가 이미 있습니다.'});
-        fs.renameSync(src, dst);
-        fs.renameSync(path.join(dst, `${id}.json`), path.join(dst, `${to}.json`));
-      }
-      sendJson(res, 200, {ok: true, id: to, name: to});
-    }).catch(err => sendJson(res, 400, {ok: false, error: err.message}));
-    return;
-  }
-
-  if (req.method === 'POST' && graphMatch) {
-    let id;
-    try { id = decodeURIComponent(graphMatch[1]); } catch { return sendJson(res, 400, {ok: false, error: '잘못된 그래프 폴더 이름입니다.'}); }
-    if (!GRAPH_ID.test(id)) return sendJson(res, 400, {ok: false, error: '잘못된 그래프 폴더 이름입니다.'});
+  if (req.method === 'POST' && req.url === '/api/graph') {
     readBody(req).then(body => {
       const data = JSON.parse(body);
       if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) throw new Error('잘못된 그래프 데이터입니다.');
-      const graphDir = path.join(NODE_DIR, id);
-      fs.mkdirSync(graphDir, {recursive: true});
-      fs.writeFileSync(path.join(graphDir, `${id}.json`), JSON.stringify(data, null, 2), 'utf8');
-      sendJson(res, 200, {ok: true, id, name: id});
+      fs.mkdirSync(NODE_DIR, {recursive: true});
+      fs.writeFileSync(GRAPH_FILE, JSON.stringify(data, null, 2), 'utf8');
+      const legacyDirs = fs.readdirSync(NODE_DIR, {withFileTypes: true})
+        .filter(entry => entry.isDirectory() && GRAPH_ID.test(entry.name) && fs.existsSync(path.join(NODE_DIR, entry.name, `${entry.name}.json`)));
+      if (legacyDirs.length) {
+        const archiveDir = path.join(HISTORY_DIR, '이전_그래프');
+        fs.mkdirSync(archiveDir, {recursive: true});
+        for (const entry of legacyDirs) {
+          const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+          let dest = path.join(archiveDir, `${entry.name}_${stamp}`), suffix = 2;
+          while (fs.existsSync(dest)) dest = path.join(archiveDir, `${entry.name}_${stamp}_${suffix++}`);
+          fs.renameSync(path.join(NODE_DIR, entry.name), dest);
+        }
+      }
+      sendJson(res, 200, {ok: true});
     }).catch(err => sendJson(res, 400, {ok: false, error: err.message}));
     return;
   }
-
   if (req.method === 'GET' && req.url === '/api/versions') {
     try {
       fs.mkdirSync(HISTORY_DIR, {recursive: true});
@@ -172,22 +137,20 @@ const server = http.createServer((req, res) => {
     });
     req.on('end', () => {
       try {
-        const {files, graphId} = JSON.parse(body);
-        const outputDir = graphId ? path.join(NODE_DIR, String(graphId)) : NODE_DIR;
-        if (graphId && !GRAPH_ID.test(String(graphId))) throw new Error('잘못된 그래프 폴더 이름입니다.');
-        fs.mkdirSync(outputDir, {recursive: true});
+        const {files} = JSON.parse(body);
+        fs.mkdirSync(NODE_DIR, {recursive: true});
 
         const written = new Set();
         for (const f of files) {
           const name = path.basename(String(f.name));   // 폴더 밖으로 나가지 못하게 경로 제거
           if (!OWN_FILE.test(name)) continue;
-          fs.writeFileSync(path.join(outputDir, name), String(f.text), 'utf8');
+          fs.writeFileSync(path.join(NODE_DIR, name), String(f.text), 'utf8');
           written.add(name);
         }
 
         // 삭제된 노드의 예전 파일 정리 (이 프로그램 파일 패턴에 맞는 것만)
-        for (const old of fs.readdirSync(outputDir)) {
-          if (OWN_FILE.test(old) && !written.has(old)) fs.unlinkSync(path.join(outputDir, old));
+        for (const old of fs.readdirSync(NODE_DIR)) {
+          if (OWN_FILE.test(old) && !written.has(old)) fs.unlinkSync(path.join(NODE_DIR, old));
         }
 
         res.writeHead(200, {'Content-Type': 'application/json; charset=utf-8'});
@@ -207,10 +170,9 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       const send = (code, obj) => { res.writeHead(code, {'Content-Type': 'application/json; charset=utf-8'}); res.end(JSON.stringify(obj)); };
       try {
-        const {name: requestedName, graphId} = JSON.parse(body);
+        const {name: requestedName} = JSON.parse(body);
         const name = path.basename(String(requestedName));
-        if (!GRAPH_ID.test(String(graphId || ''))) return send(400, {ok: false, error: '그래프 폴더를 찾지 못했습니다.'});
-        const full = path.join(NODE_DIR, String(graphId), name);
+        const full = path.join(NODE_DIR, name);
         if (!OWN_FILE.test(name) || !fs.existsSync(full)) return send(404, {ok: false, error: '파일이 아직 없습니다. 잠시 후 다시 눌러 주세요.'});
         const cmd = process.platform === 'win32' ? `start "" "${full}"`
                   : process.platform === 'darwin' ? `open "${full}"`
@@ -276,13 +238,13 @@ const server = http.createServer((req, res) => {
 
   // 프로젝트 폴더 안의 JSON 파일 목록 (불러오기 창에서 사용)
   if (req.method === 'GET' && req.url === '/api/project-json') {
-    const SKIP = new Set(['node_modules', '.venv', '변경이력']);   // 변경이력은 버전 스냅샷이라 목록에서 제외
+    const SKIP = new Set(['node_modules', '.venv', '변경이력', '노드파일']);   // 내부 데이터와 변경이력은 목록에서 제외
     const found = [];
     try {
       (function walk(dir, depth) {
         if (depth > 3 || found.length >= 300) return;
         for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
-          if (entry.name.startsWith('.') || SKIP.has(entry.name)) continue;
+          if (entry.name.startsWith('.') || SKIP.has(entry.name) || entry.name === 'data-folder.json') continue;
           const full = path.join(dir, entry.name);
           if (entry.isDirectory()) walk(full, depth + 1);
           else if (entry.isFile() && /\.json$/i.test(entry.name)) found.push(path.relative(ROOT, full).split(path.sep).join('/'));
