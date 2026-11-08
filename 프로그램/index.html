@@ -66,9 +66,9 @@
   <div class="toolbar-group"><h1>인과 편집기</h1><button id="btnHelp">도움말</button></div>
   <div class="toolbar-group"><button id="btnAdd">노드 추가</button>
     <select id="layoutMode" title="정렬 방식을 선택하면 바로 적용됩니다">
-      <option value="layered">계층 · 좌→우</option><option value="pyramid" title="인과 단계별 위에서 아래로">피라미드</option><option value="diamond" title="시작은 위, 목표는 아래에 두고 가운데를 넓힘">다이아몬드</option><option value="circle">원형</option><option value="grid">격자</option>
+      <option value="pyramid" title="인과 단계별 아래에서 위로">피라미드</option><option value="inversePyramid" title="시작은 위, 목표는 아래에 배치">역피라미드</option><option value="diamond" title="시작은 위, 목표는 아래에 두고 가운데를 넓힘">다이아몬드</option><option value="circle" title="시작은 위쪽, 목표는 아래쪽에 배치">원형</option><option value="grid" title="화살표 단계에 따라 왼쪽에서 오른쪽으로 배치">격자</option>
     </select></div>
-  <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드와 바로 연결된 노드만 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
+  <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
   <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReset">초기화</button></div>
   <span id="fstat" class="muted"></span>
 </header>
@@ -86,9 +86,7 @@
           <option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option>
         </select>
       </label>
-      <label>역할
-        <select id="f_kind"><option value="start">시작</option><option value="normal">일반</option><option value="goal">목표</option></select>
-      </label>
+      <label>역할<input id="f_kind" readonly aria-readonly="true"></label>
       <label>제목<input id="f_title"></label>
       <label>메모<textarea id="f_memo"></textarea></label>
       <button id="btnOpenMd">노드 md 파일 열기</button>
@@ -114,8 +112,9 @@
     <li>노드 선택 후 Shift+클릭 다른 노드: 화살표 연결 (원인 → 결과)</li>
     <li>화살표를 클릭하면 메모를 적을 수 있습니다</li>
     <li>노드·화살표 선택 후 Delete: 삭제</li>
-    <li>노드를 선택해 진행 상태(미착수·진행 중·완료·중단·실패), 역할(시작·일반·목표), 메모를 편집합니다. 상태와 역할에 따라 표시가 달라집니다</li>
-    <li>포커스 모드: 선택 노드와 바로 연결된 노드만 표시합니다. 진행 상태와 색은 바뀌지 않으며, 포커스 종료를 누르면 전체 그래프가 다시 보입니다</li>
+    <li>노드 역할은 화살표 연결에 따라 자동 결정됩니다. 나가는 화살표만 있으면 시작, 들어오는 화살표만 있으면 목표, 둘 다 있거나 화살표가 없으면 일반입니다</li>
+    <li>노드를 선택해 진행 상태(미착수·진행 중·완료·중단·실패)와 메모를 편집합니다. 상태와 자동 역할에 따라 표시가 달라집니다</li>
+    <li>포커스 모드: 버튼을 누른 뒤 시작 노드를 선택하면 화살표 방향으로 이어지는 경로를 표시합니다. 선택 노드로 들어오는 화살표는 경로에 포함하지 않으며, 포커스 중 다른 노드를 선택해도 경로는 고정됩니다. 포커스 종료를 누르면 전체 그래프가 다시 보입니다</li>
     <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양, 선택 강조 색을 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
   </ul>
   <button id="btnHelpClose">닫기</button>
@@ -340,15 +339,22 @@ function normalizeNodeStatuses() {
     if (!NODE_STATUSES[n.status]) n.status = 'not_started';
     delete n.checked;
     delete n.now;
-    if (!['normal', 'start', 'goal'].includes(n.kind)) n.kind = 'normal';
+    delete n.kind;
   }
   for (const e of S.edges || []) {
     if (e.label) e.memo = [e.memo, e.label].filter(Boolean).join(' / ');
     delete e.label;
   }
 }
-const startNodes = () => S.nodes.filter(n => n.kind === 'start');
-const goalNodes = () => S.nodes.filter(n => n.kind === 'goal');
+function nodeKind(n) {
+  const hasIncoming = S.edges.some(e => e.to === n.id);
+  const hasOutgoing = S.edges.some(e => e.from === n.id);
+  if (hasOutgoing && !hasIncoming) return 'start';
+  if (hasIncoming && !hasOutgoing) return 'goal';
+  return 'normal';
+}
+const startNodes = () => S.nodes.filter(n => nodeKind(n) === 'start');
+const goalNodes = () => S.nodes.filter(n => nodeKind(n) === 'goal');
 const dims = () => S.settings.shape === 'circle' ? CIRCLE : RECT;
 const pushTo = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
 
@@ -376,23 +382,53 @@ function render() {
   const g = analyze(), st = S.settings, D = dims(), W = D.w, H = D.h, selectionColor = st.selectionColor;
   if (focusNodeId && !node(focusNodeId)) focusNodeId = null;
   const visibleNodeIds = new Set(S.nodes.map(n => n.id));
+  const visibleEdgeIds = new Set(S.edges.map(e => e.id));
   if (focusMode && focusNodeId) {
-    visibleNodeIds.clear(); visibleNodeIds.add(focusNodeId);
-    for (const e of S.edges) {
-      if (e.from === focusNodeId) visibleNodeIds.add(e.to);
-      if (e.to === focusNodeId) visibleNodeIds.add(e.from);
+    visibleNodeIds.clear();
+    visibleEdgeIds.clear();
+    visibleNodeIds.add(focusNodeId);
+    const queue = [focusNodeId];
+    for (let i = 0; i < queue.length; i++) {
+      const currentId = queue[i];
+      for (const e of S.edges) {
+        if (e.from !== currentId) continue;
+        visibleEdgeIds.add(e.id);
+        if (!visibleNodeIds.has(e.to)) {
+          visibleNodeIds.add(e.to);
+          queue.push(e.to);
+        }
+      }
     }
   }
   $('#stage').style.background = st.bgColor;
   const markerColors = new Set(Object.values(NODE_STATUSES).map(status => status.color));
-  let h = `<defs>${[...markerColors].map(color => `<marker id="arr-${color.slice(1)}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="${color}"/></marker>`).join('')}</defs>`;
+  let h = `<defs>${[...markerColors].map(color => `<marker id="arr-${color.slice(1)}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="${color}"/></marker>`).join('')}<marker id="arr-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#000000"/></marker></defs>`;
+
+  const focusOffsets = new Map();
+  if (focusMode && focusNodeId) {
+    const focusedEdges = S.edges.filter(e => visibleEdgeIds.has(e.id));
+    for (const n of S.nodes) {
+      const outgoing = focusedEdges.filter(e => e.from === n.id);
+      const incoming = focusedEdges.filter(e => e.to === n.id);
+      const assignOffsets = (edges, key) => edges.forEach((e, i) => {
+        const spacing = Math.min(14, 70 / Math.max(1, edges.length - 1));
+        const offset = (i - (edges.length - 1) / 2) * spacing;
+        const current = focusOffsets.get(e.id) || {start: 0, end: 0};
+        current[key] = offset;
+        focusOffsets.set(e.id, current);
+      });
+      assignOffsets(outgoing, 'start');
+      assignOffsets(incoming, 'end');
+    }
+  }
 
   for (const e of S.edges) {
-    if (!visibleNodeIds.has(e.from) || !visibleNodeIds.has(e.to)) continue;
+    if (!visibleEdgeIds.has(e.id)) continue;
     const a = node(e.from), b = node(e.to);
     const forward = a.x + W / 2 <= b.x + W / 2;
     const x1 = forward ? a.x + W : a.x, x2 = forward ? b.x : b.x + W;
-    const y1 = a.y + H / 2, y2 = b.y + H / 2;
+    const offsets = focusOffsets.get(e.id) || {start: 0, end: 0};
+    const y1 = a.y + H / 2 + offsets.start, y2 = b.y + H / 2 + offsets.end;
     let d;
     if (st.lineStyle === 'straight') {
       d = `M${x1},${y1} L${x2},${y2}`;
@@ -404,10 +440,11 @@ function render() {
     const bStatus = NODE_STATUSES[b.status] || NODE_STATUSES.not_started;
     const sameStatus = a.status === b.status;
     const color = sameStatus ? aStatus.color : bStatus.color;
-    const stroke = sameStatus ? color : `url(#grad-${esc(e.id)})`;
-    const w = (a.status === 'completed' && b.status === 'completed' ? 3 : 1) + (sel.type === 'edge' && sel.id === e.id ? 2 : 0);
+    const isFocusedEdge = focusMode && !!focusNodeId;
+    const stroke = isFocusedEdge ? '#000000' : sameStatus ? color : `url(#grad-${esc(e.id)})`;
+    const w = (isFocusedEdge ? 3 : a.status === 'completed' && b.status === 'completed' ? 3 : 1) + (sel.type === 'edge' && sel.id === e.id ? 2 : 0);
     if (!sameStatus) h += `<defs><linearGradient id="grad-${esc(e.id)}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0%" stop-color="${aStatus.color}"/><stop offset="50%" stop-color="${aStatus.color}"/><stop offset="50%" stop-color="${bStatus.color}"/><stop offset="100%" stop-color="${bStatus.color}"/></linearGradient></defs>`;
-    h += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${w}" marker-end="url(#arr-${color.slice(1)})"/>`;
+    h += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${w}" marker-end="${isFocusedEdge ? 'url(#arr-focus)' : `url(#arr-${color.slice(1)})`}"/>`;
     const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 8;
     const edgeMemoSummary = e.memo ? titleLines(e.memo, 14, 1)[0] : '';
     if (edgeMemoSummary) h += `<text x="${mx}" y="${my}" font-size="11" fill="#222" text-anchor="middle" paint-order="stroke" stroke="${st.bgColor}" stroke-width="4" pointer-events="none"><title>${esc(e.memo)}</title>${esc(edgeMemoSummary)}</text>`;
@@ -417,7 +454,8 @@ function render() {
   for (const n of S.nodes) {
     if (!visibleNodeIds.has(n.id)) continue;
     const isSel = sel.type === 'node' && sel.id === n.id;
-    const fill = n.kind === 'start' ? '#ecfdf5' : n.kind === 'goal' ? '#fef2f2' : st.nodeColor;
+    const kind = nodeKind(n);
+    const fill = kind === 'start' ? '#ecfdf5' : kind === 'goal' ? '#fef2f2' : st.nodeColor;
     const status = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
     const stroke = isSel ? selectionColor : status.color;
     const sw = isSel ? 4 : 3;
@@ -464,7 +502,7 @@ function renderPanel() {
   $('#nodeForm').hidden = !n;
   $('#edgeBox').hidden = !e;
   if (n) {
-    $('#f_kind').value = n.kind || 'normal';
+    $('#f_kind').value = nodeKind(n) === 'start' ? '시작' : nodeKind(n) === 'goal' ? '목표' : '일반';
     for (const [id, key] of NODE_FIELDS) $('#' + id).value = n[key] ?? '';
     $('#f_status').value = n.status || 'not_started';
   }
@@ -485,7 +523,10 @@ function setSidebarVisible(visible, persist = false) {
 
 function select(type, id) {
   sel = {type, id};
-  if (focusMode && type === 'node') focusNodeId = id;
+  if (focusMode && !focusNodeId && type === 'node') {
+    focusNodeId = id;
+    setFstat('선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다.');
+  }
   render(); renderPanel();
 }
 
@@ -497,12 +538,14 @@ function toggleFocusMode() {
     setFstat('전체 그래프를 표시합니다.');
   } else {
     focusMode = true;
-    focusNodeId = sel.type === 'node' ? sel.id : null;
+    sel = {type: null, id: null};
+    focusNodeId = null;
     $('#btnFocus').textContent = '포커스 종료';
     $('#btnFocus').setAttribute('aria-pressed', 'true');
-    setFstat(focusNodeId ? '선택 노드와 바로 연결된 노드만 표시합니다.' : '포커스할 노드를 선택하세요.');
+    setFstat('포커스할 노드를 선택하세요.');
   }
   render();
+  renderPanel();
 }
 
 /* ---------- 편집 동작 ---------- */
@@ -516,7 +559,7 @@ function freeNodeId() {
 
 function addNode(x, y) {
   const id = freeNodeId();
-  S.nodes.push({id, kind:'normal', status:'not_started', title:'새 노드', x: Math.max(0, x), y: Math.max(0, y), memo:''});
+  S.nodes.push({id, status:'not_started', title:'새 노드', x: Math.max(0, x), y: Math.max(0, y), memo:''});
   save(); select('node', id);
 }
 
@@ -567,7 +610,8 @@ const fileName = n => `n${n.id.slice(1).padStart(4, '0')}_${(n.title || '노드'
 const linkTo = n => `[${n.title}](${encodeURI(fileName(n))})`;
 
 function nodeMd(n) {
-  const kind = n.kind === 'start' ? ' (시작)' : n.kind === 'goal' ? ' (목표)' : '';
+  const role = nodeKind(n);
+  const kind = role === 'start' ? ' (시작)' : role === 'goal' ? ' (목표)' : '';
   const status = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
   const L = [`# ${n.title}${kind}`, '', `## 진행 상태`, '', status.label, ''];
   if (n.memo) L.push('## 메모', '', n.memo, '');
@@ -639,32 +683,62 @@ async function syncNodeFiles() {
 function autoLayout(mode) {
   const W = dims().w, H = dims().h, N = S.nodes.length;
   if (!N) return;
+  // 화살표를 따라 시작 노드에서 계산한 단계. 정렬마다 좌우 또는 상하 흐름의 기준으로 씁니다.
+  const adj = new Map(), hasIn = new Set();
+  for (const e of S.edges) { pushTo(adj, e.from, e.to); hasIn.add(e.to); }
+  const roots = startNodes().length ? startNodes().map(n => n.id) : S.nodes.filter(n => !hasIn.has(n.id)).map(n => n.id);
+  const starts = roots.length ? roots : [S.nodes[0].id];
+  const level = new Map(), q = [];
+  for (const id of starts) { level.set(id, 0); q.push(id); }
+  while (q.length) {
+    const u = q.shift();
+    for (const v of adj.get(u) || []) if (!level.has(v)) { level.set(v, level.get(u) + 1); q.push(v); }
+  }
+  const maxL = Math.max(0, ...level.values());
+  for (const n of S.nodes) if (!level.has(n.id)) level.set(n.id, maxL + 1);
+  const goals = goalNodes();
   if (mode === 'circle') {
     const R = Math.max(220, N * (Math.max(W, H) + 30) / (2 * Math.PI));
     const cx = R + W / 2 + 40, cy = R + H / 2 + 40;
-    S.nodes.forEach((n, i) => {
+    const startIds = new Set(starts), goalIds = new Set(goals.map(n => n.id));
+    const circleSlots = Array.from({length: N}, (_, i) => i);
+    const slots = new Map();
+    const usedSlots = new Set();
+    const assignNear = (nodes, preferred) => nodes.forEach((n, i) => {
+      if (slots.has(n.id)) return;
+      const desired = preferred(i);
+      const slot = circleSlots.filter(candidate => !usedSlots.has(candidate)).sort((a, b) => Math.abs(a - desired) - Math.abs(b - desired))[0];
+      if (slot !== undefined) { slots.set(n.id, slot); usedSlots.add(slot); }
+    });
+    assignNear(starts.map(id => node(id)).filter(Boolean), i => i);
+    assignNear(goals, i => Math.floor(N / 2) + i);
+    const remainingSlots = circleSlots.filter(slot => !usedSlots.has(slot));
+    const others = S.nodes.filter(n => !startIds.has(n.id) && !goalIds.has(n.id)).sort((a, b) => level.get(a.id) - level.get(b.id) || a.y - b.y || a.x - b.x);
+    others.forEach((n, i) => slots.set(n.id, remainingSlots[i]));
+    S.nodes.forEach(n => {
+      const i = slots.get(n.id) ?? 0;
       const t = -Math.PI / 2 + 2 * Math.PI * i / N;
       n.x = Math.round(cx + R * Math.cos(t) - W / 2);
       n.y = Math.round(cy + R * Math.sin(t) - H / 2);
     });
   } else if (mode === 'grid') {
-    const c = Math.ceil(Math.sqrt(N));
-    S.nodes.forEach((n, i) => { n.x = 40 + (i % c) * (W + 60); n.y = 40 + Math.floor(i / c) * (H + 60); });
-  } else {
-    // 계층: 시작 노드(없으면 들어오는 화살표가 없는 노드)에서 화살표를 따라 단계별로 열을 나눔
-    const adj = new Map(), hasIn = new Set();
-    for (const e of S.edges) { pushTo(adj, e.from, e.to); hasIn.add(e.to); }
-    let roots = startNodes().length ? startNodes().map(n => n.id) : S.nodes.filter(n => !hasIn.has(n.id)).map(n => n.id);
-    if (!roots.length) roots = [S.nodes[0].id];
-    const level = new Map(), q = [];
-    for (const r of roots) { level.set(r, 0); q.push(r); }
-    while (q.length) {
-      const u = q.shift();
-      for (const v of adj.get(u) || []) if (!level.has(v)) { level.set(v, level.get(u) + 1); q.push(v); }
+    if (!S.edges.length) {
+      const c = Math.ceil(Math.sqrt(N));
+      S.nodes.forEach((n, i) => { n.x = 40 + (i % c) * (W + 60); n.y = 40 + Math.floor(i / c) * (H + 60); });
+    } else {
+      const goalLevel = Math.max(0, ...level.values()) + 1;
+      for (const n of goals) level.set(n.id, goalLevel);
+      const cols = new Map();
+      for (const n of S.nodes) { const L = level.get(n.id); if (!cols.has(L)) cols.set(L, []); cols.get(L).push(n); }
+      for (const [L, list] of [...cols].sort((a, b) => a[0] - b[0])) {
+        list.sort((a, b) => a.y - b.y || a.x - b.x);
+        const centerY = 40 + (list.length - 1) * (H + 40) / 2;
+        list.forEach((n, i) => { n.x = 40 + L * (W + 80); n.y = centerY - (list.length - 1) * (H + 40) / 2 + i * (H + 40); });
+      }
     }
-    const maxL = Math.max(0, ...level.values());
-    for (const n of S.nodes) if (!level.has(n.id)) level.set(n.id, maxL + 1);   // 연결 안 된 노드는 맨 오른쪽 열
-    if (mode === 'diamond' && goalNodes().length) { const gl = Math.max(...level.values()) + 1; for (const g of goalNodes()) level.set(g.id, gl); }
+  } else {
+    if ((mode === 'inversePyramid' || mode === 'diamond') && goals.length) { const goalLevel = Math.max(...level.values()) + 1; for (const g of goals) level.set(g.id, goalLevel); }
+    const maxLayoutLevel = Math.max(...level.values());
     const cols = new Map();
     for (const n of S.nodes) { const L = level.get(n.id); if (!cols.has(L)) cols.set(L, []); cols.get(L).push(n); }
     const ordered = [...cols].sort((a, b) => a[0] - b[0]);
@@ -673,14 +747,35 @@ function autoLayout(mode) {
       const widest = Math.max(...ordered.map(([, list]) => list.length));
       for (const [L, list] of ordered) {
         const offset = (widest - list.length) * (W + 50) / 2;
-        list.forEach((n, i) => { n.x = 40 + offset + i * (W + 50); n.y = 40 + L * (H + 70); });
+        list.forEach((n, i) => { n.x = 40 + offset + i * (W + 50); n.y = 40 + (maxLayoutLevel - L) * (H + 70); });
       }
-    } else if (mode === 'diamond') {
+    } else if (mode === 'inversePyramid') {
       const widest = Math.max(...ordered.map(([, list]) => list.length));
       for (const [L, list] of ordered) {
         const offset = (widest - list.length) * (W + 50) / 2;
         list.forEach((n, i) => { n.x = 40 + offset + i * (W + 50); n.y = 40 + L * (H + 70); });
       }
+    } else if (mode === 'diamond') {
+      const widest = Math.max(...ordered.map(([, list]) => list.length));
+      const lastIndex = Math.max(1, ordered.length - 1);
+      const centerX = 40 + (widest - 1) * (W + 50) / 2;
+      let y = 40;
+      ordered.forEach(([, list], row) => {
+        const progress = row / lastIndex;
+        const widthFactor = 1 - Math.abs(2 * progress - 1);
+        const capacity = Math.max(1, Math.round(1 + (widest - 1) * widthFactor));
+        const subrowCount = Math.ceil(list.length / capacity);
+        for (let subrow = 0; subrow < subrowCount; subrow++) {
+          const items = list.slice(subrow * capacity, (subrow + 1) * capacity);
+          const span = items.length > 1 ? (capacity - 1) * (W + 50) : 0;
+          const left = centerX - span / 2;
+          items.forEach((n, i) => {
+            n.x = Math.round(left + (items.length > 1 ? i * span / (items.length - 1) : 0));
+            n.y = y + subrow * (H + 35);
+          });
+        }
+        y += subrowCount * (H + 35) + 55;
+      });
     } else {
       for (const [L, list] of ordered) {
         const centerY = 40 + (list.length - 1) * (H + 40) / 2;
@@ -829,11 +924,6 @@ NODE_FIELDS.forEach(([id, key]) => $('#' + id).addEventListener('input', e => {
   const n = node(sel.id); if (!n) return;
   n[key] = e.target.value; save(); render();
 }));
-$('#f_kind').addEventListener('change', e => {
-  const n = node(sel.id); if (!n) return;
-  n.kind = ['normal', 'start', 'goal'].includes(e.target.value) ? e.target.value : 'normal';
-  save(); render(); renderPanel();
-});
 EDGE_FIELDS.forEach(([id, key]) => $('#' + id).addEventListener('input', e => {
   const x = edge(sel.id); if (!x) return;
   x[key] = e.target.value; save(); render();
