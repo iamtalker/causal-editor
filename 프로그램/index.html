@@ -18,6 +18,13 @@
   #btnReset{color:#6b7280}
   #layoutMode{max-width:170px;padding:6px 8px;border:1px solid #cbd2dc;border-radius:7px;background:white;font:inherit;font-size:13px;color:#263244}
   #fstat{display:block;min-width:0;max-width:260px;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .search-wrap{position:relative;display:flex;align-items:center;gap:4px}
+  #nodeSearch{width:190px;padding:6px 8px;border:1px solid #cbd2dc;border-radius:7px;font:inherit;font-size:13px}
+  #searchResults{position:absolute;z-index:20;top:calc(100% + 6px);left:0;width:min(340px,80vw);max-height:340px;overflow:auto;background:#fff;border:1px solid #d4d9e1;border-radius:8px;box-shadow:0 8px 24px #18223026}
+  #searchResults[hidden]{display:none}
+  #searchResults button{display:block;width:100%;padding:8px 10px;border:0;border-radius:0;text-align:left;white-space:normal}
+  #searchResults button+button{border-top:1px solid #eee}
+  .search-detail{display:block;color:#667085;font-size:11px;margin-top:2px}
   button:disabled{opacity:.4;cursor:not-allowed}
   .btn input{display:none}
   main{flex:1;display:flex;min-height:0}
@@ -68,6 +75,7 @@
     <select id="layoutMode" title="정렬 방식을 선택하면 바로 적용됩니다">
       <option value="pyramid" title="인과 단계별 아래에서 위로">피라미드</option><option value="inversePyramid" title="시작은 위, 목표는 아래에 배치">역피라미드</option><option value="diamond" title="시작은 위, 목표는 아래에 두고 가운데를 넓힘">다이아몬드</option><option value="circle" title="시작은 위쪽, 목표는 아래쪽에 배치">원형</option><option value="grid" title="화살표 단계에 따라 왼쪽에서 오른쪽으로 배치">격자</option>
     </select></div>
+  <div class="toolbar-group"><div class="search-wrap"><input id="nodeSearch" type="search" placeholder="노드 제목·메모 검색" aria-label="노드 제목과 메모 검색" autocomplete="off"><div id="searchResults" role="listbox" aria-label="검색 결과" hidden></div></div></div>
   <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
   <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReset">초기화</button></div>
   <span id="fstat" class="muted"></span>
@@ -108,6 +116,7 @@
     <li>빈 곳 더블클릭: 노드 추가 (노드 = 하나의 상태)</li>
     <li>캔버스에서 마우스 오른쪽 버튼: 대상에 맞는 편집 메뉴</li>
     <li>빈 캔버스를 누른 채 드래그: 화면 이동</li>
+    <li>상단 검색: 노드 제목과 메모를 검색하고, 결과를 누르면 해당 노드로 이동합니다</li>
     <li>노드 드래그: 위치 이동</li>
     <li>노드 선택 후 Shift+클릭 다른 노드: 화살표 연결 (원인 → 결과)</li>
     <li>화살표를 클릭하면 메모를 적을 수 있습니다</li>
@@ -539,6 +548,48 @@ function select(type, id) {
   }
   render(); renderPanel();
 }
+
+function searchNodes(query) {
+  const q = query.trim().toLocaleLowerCase();
+  if (!q) return [];
+  return S.nodes.filter(n => `${n.title || ''}\n${n.memo || ''}`.toLocaleLowerCase().includes(q));
+}
+function renderSearchResults() {
+  const input = $('#nodeSearch'), box = $('#searchResults'), q = input.value.trim();
+  box.replaceChildren();
+  if (!q) { box.hidden = true; return; }
+  const matches = searchNodes(q);
+  if (!matches.length) {
+    const empty = document.createElement('div'); empty.textContent = '검색 결과가 없습니다.';
+    empty.style.cssText = 'padding:10px;color:#667085;font-size:13px'; box.appendChild(empty);
+  } else {
+    for (const n of matches.slice(0, 50)) {
+      const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role','option');
+      b.innerHTML = `${esc(n.title || '(제목 없음)')}<span class="search-detail">${esc(trunc(n.memo || '메모 없음', 90))}</span>`;
+      b.addEventListener('click', () => goToSearchResult(n.id)); box.appendChild(b);
+    }
+    if (matches.length > 50) { const more = document.createElement('div'); more.textContent = `외 ${matches.length - 50}개 결과`; more.style.cssText = 'padding:8px;color:#667085;font-size:12px'; box.appendChild(more); }
+  }
+  box.hidden = false;
+}
+function goToSearchResult(id) {
+  if (focusMode) toggleFocusMode();
+  setSidebarVisible(true, true);
+  select('node', id);
+  const n = node(id), stage = $('#stage'), rect = svg.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+  const x = rect.left - sr.left + (n.x + dims().w / 2 - viewMinX) * zoom;
+  const y = rect.top - sr.top + (n.y + dims().h / 2 - viewMinY) * zoom;
+  stage.scrollLeft += x - stage.clientWidth / 2;
+  stage.scrollTop += y - stage.clientHeight / 2;
+  $('#searchResults').hidden = true;
+  $('#nodeSearch').focus();
+}
+$('#nodeSearch').addEventListener('input', renderSearchResults);
+$('#nodeSearch').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { const first = searchNodes(e.currentTarget.value)[0]; if (first) { e.preventDefault(); goToSearchResult(first.id); } }
+  if (e.key === 'Escape') $('#searchResults').hidden = true;
+});
+document.addEventListener('mousedown', e => { if (!e.target.closest('.search-wrap')) $('#searchResults').hidden = true; });
 
 function toggleFocusMode() {
   if (focusMode) {
