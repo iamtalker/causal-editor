@@ -6,9 +6,9 @@
 <title>인과 편집기</title>
 <style>
   body{margin:0;font-family:system-ui,"Malgun Gothic",sans-serif;background:#f4f5f7;color:#222;height:100vh;display:flex;flex-direction:column}
-  header{position:relative;z-index:2;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:9px 14px;background:#fff;border-bottom:1px solid #dce1e8;box-shadow:0 1px 3px #1822300a}
+  header{position:relative;z-index:2;display:flex;flex-wrap:nowrap;gap:8px 10px;align-items:center;padding:9px 14px;background:#fff;border-bottom:1px solid #dce1e8;box-shadow:0 1px 3px #1822300a;overflow-x:auto;scrollbar-width:thin}
   header h1{font-size:17px;letter-spacing:-.3px;margin:0 4px 0 0;white-space:nowrap}
-  .toolbar-group{display:flex;gap:6px;align-items:center;padding-right:12px;border-right:1px solid #e5e7eb}
+  .toolbar-group{display:flex;flex:0 0 auto;gap:6px;align-items:center;padding-right:10px;border-right:1px solid #e5e7eb}
   .toolbar-group:last-of-type{border-right:0;padding-right:0}
   button,.btn{padding:6px 10px;border:1px solid #cbd2dc;border-radius:7px;background:#fff;color:#263244;cursor:pointer;font:inherit;font-size:13px;line-height:1.35;white-space:nowrap;transition:background .12s,border-color .12s}
   button:hover,.btn:hover{background:#f4f7fb;border-color:#aab5c4}
@@ -16,10 +16,17 @@
   #btnVersions{border-color:#bfd3f7;background:#f5f8ff;color:#1d4ed8}
   #btnFocus[aria-pressed="true"]{border-color:#2563eb;background:#eff6ff;color:#1d4ed8}
   #btnReset{color:#6b7280}
+  .history-buttons{gap:3px;padding-right:0;border-right:0}
+  .history-buttons button{box-sizing:border-box;width:28px;height:30px;padding:3px;display:grid;place-items:center;font-size:18px;line-height:1}
   #layoutMode{max-width:170px;padding:6px 8px;border:1px solid #cbd2dc;border-radius:7px;background:white;font:inherit;font-size:13px;color:#263244}
-  #fstat{display:block;min-width:0;max-width:260px;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #layoutOptions{position:fixed;z-index:40;min-width:170px;max-height:min(320px,70vh);overflow:auto;padding:4px;border:1px solid #d4d9e1;border-radius:8px;background:#fff;box-shadow:0 8px 24px #18223026}
+  #layoutOptions[hidden]{display:none}
+  #layoutOptions button{display:block;width:100%;padding:7px 9px;border:0;border-radius:5px;text-align:left}
+  #layoutOptions button:hover,#layoutOptions button[aria-selected="true"]{background:#eff6ff}
+  #fstat{display:block;flex:0 0 auto;min-width:0;max-width:100%;margin-top:auto;padding-top:8px;border-top:1px solid #e5e7eb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+  #fstat:empty{display:none}
   .search-wrap{position:relative;display:flex;align-items:center;gap:4px}
-  #nodeSearch{width:190px;padding:6px 8px;border:1px solid #cbd2dc;border-radius:7px;font:inherit;font-size:13px}
+  #nodeSearch{width:150px;padding:6px 8px;border:1px solid #cbd2dc;border-radius:7px;font:inherit;font-size:13px}
   #searchResults{position:absolute;z-index:20;top:calc(100% + 6px);left:0;width:min(340px,80vw);max-height:340px;overflow:auto;background:#fff;border:1px solid #d4d9e1;border-radius:8px;box-shadow:0 8px 24px #18223026}
   #searchResults[hidden]{display:none}
   #searchResults button{display:block;width:100%;padding:8px 10px;border:0;border-radius:0;text-align:left;white-space:normal}
@@ -38,12 +45,15 @@
   #canvasMenu button.danger{color:#b42318}
   #tip[hidden]{display:none}
   #tip{position:sticky;top:0;z-index:1;background:#fffbe6;border-bottom:1px solid #f0e0a0;padding:6px 12px;font-size:13px;color:#554}
-  aside{width:300px;flex:0 0 300px;border-left:1px solid #e1e5eb;background:#fff;padding:18px 16px;overflow:auto;box-sizing:border-box}
+  aside{width:300px;flex:0 0 300px;border-left:1px solid #e1e5eb;background:#fff;padding:18px 16px;overflow:auto;box-sizing:border-box;display:flex;flex-direction:column}
   aside[hidden]{display:none}
   #help{color:#667085;font-size:13px;line-height:1.75}
   aside label{display:block;font-size:12px;color:#555;margin-top:10px}
   aside input,aside textarea,aside select{width:100%;box-sizing:border-box;padding:6px;border:1px solid #ccc;border-radius:6px;font:inherit;margin-top:3px}
   aside textarea{min-height:52px;resize:vertical}
+  #nodeForm:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column}
+  #memoLabel{flex:0 1 420px;min-height:200px;display:flex;flex-direction:column}
+  #f_memo{flex:1;min-height:180px}
   aside button{margin-top:12px}
   dialog{border:1px solid #ccc;border-radius:10px;padding:18px 20px;max-width:520px;width:90vw;color:#222}
   dialog::backdrop{background:rgba(0,0,0,.3)}
@@ -64,21 +74,20 @@
   dialog .btn{display:inline-block;margin-top:14px}
   .hint{font-size:13px;color:#555;line-height:1.8}
   .muted{font-size:12px;color:#888;margin-bottom:4px}
-  @media (max-width:1000px){header{gap:7px}.toolbar-group{padding-right:8px}.toolbar-group button{padding:6px 8px}#fstat{max-width:180px}}
-  @media (max-width:800px){main{flex-direction:column}aside{width:auto;flex:0 0 auto;border-left:0;border-top:1px solid #ddd;max-height:35vh}#fstat{margin-left:0;max-width:100%}}
+  @media (max-width:1000px){header{gap:7px}.toolbar-group{padding-right:8px}.toolbar-group button{padding:6px 8px}#btnUndo,#btnRedo{padding:3px}}
+  @media (max-width:800px){main{flex-direction:column}aside{width:auto;flex:0 0 auto;border-left:0;border-top:1px solid #ddd;max-height:35vh}#memoLabel{flex-basis:240px;min-height:160px}#f_memo{min-height:140px}}
 </style>
 </head>
 <body>
 <header>
   <div class="toolbar-group"><h1>인과 편집기</h1><button id="btnHelp">도움말</button></div>
-  <div class="toolbar-group"><button id="btnAdd">노드 추가</button>
-    <select id="layoutMode" title="정렬 방식을 선택하면 바로 적용됩니다">
-      <option value="pyramid" title="인과 단계별 아래에서 위로">피라미드</option><option value="inversePyramid" title="시작은 위, 목표는 아래에 배치">역피라미드</option><option value="diamond" title="시작은 위, 목표는 아래에 두고 가운데를 넓힘">다이아몬드</option><option value="circle" title="시작은 위쪽, 목표는 아래쪽에 배치">원형</option><option value="grid" title="화살표 단계에 따라 왼쪽에서 오른쪽으로 배치">격자</option>
-    </select></div>
+  <div class="toolbar-group"><button id="btnAdd">노드 추가</button><div class="toolbar-group history-buttons" aria-label="편집 기록"><button id="btnUndo" type="button" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기" disabled>↶</button><button id="btnRedo" type="button" title="다시 실행 (Ctrl+Y 또는 Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↷</button></div>
+    <div class="layout-picker"><button id="layoutMode" type="button" title="정렬 방식을 선택하면 바로 적용됩니다" aria-haspopup="listbox" aria-expanded="false">피라미드 ▾</button><div id="layoutOptions" role="listbox" aria-label="정렬 방식" hidden>
+      <button type="button" role="option" data-layout="pyramid" aria-selected="true">피라미드</button><button type="button" role="option" data-layout="inversePyramid" aria-selected="false">역피라미드</button><button type="button" role="option" data-layout="diamond" aria-selected="false">다이아몬드</button><button type="button" role="option" data-layout="circle" aria-selected="false">원형</button><button type="button" role="option" data-layout="grid" aria-selected="false">격자</button>
+    </div></div></div>
   <div class="toolbar-group"><div class="search-wrap"><input id="nodeSearch" type="search" placeholder="노드 제목·메모 검색" aria-label="노드 제목과 메모 검색" autocomplete="off"><div id="searchResults" role="listbox" aria-label="검색 결과" hidden></div></div></div>
   <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
   <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReset">초기화</button></div>
-  <span id="fstat" class="muted"></span>
 </header>
 <main>
   <div id="stage"><div id="tip"></div><svg id="canvas" width="2400" height="1600"></svg></div>
@@ -96,7 +105,7 @@
       </label>
       <label>역할<input id="f_kind" readonly aria-readonly="true"></label>
       <label>제목<input id="f_title"></label>
-      <label>메모<textarea id="f_memo"></textarea></label>
+      <label id="memoLabel">메모<textarea id="f_memo"></textarea></label>
       <button id="btnOpenMd">노드 md 파일 열기</button>
       <button id="btnDelNode">이 노드 삭제</button>
     </div>
@@ -105,6 +114,7 @@
       <label>메모<textarea id="e_memo"></textarea></label>
       <button id="btnDelEdge">이 화살표 삭제</button>
     </div>
+    <span id="fstat" class="muted" role="status" aria-live="polite"></span>
   </aside>
 </main>
 
@@ -117,6 +127,7 @@
     <li>캔버스에서 마우스 오른쪽 버튼: 대상에 맞는 편집 메뉴</li>
     <li>빈 캔버스를 누른 채 드래그: 화면 이동</li>
     <li>상단 검색: 노드 제목과 메모를 검색하고, 결과를 누르면 해당 노드로 이동합니다</li>
+    <li>상단의 굽은 화살표 버튼 또는 Ctrl+Z / Ctrl+Y: 편집 되돌리기·다시 실행 (Ctrl+Shift+Z도 다시 실행)</li>
     <li>노드 드래그: 위치 이동</li>
     <li>노드 선택 후 Shift+클릭 다른 노드: 화살표 연결 (원인 → 결과)</li>
     <li>화살표를 클릭하면 메모를 적을 수 있습니다</li>
@@ -226,6 +237,9 @@ let S, sel = {type: null, id: null}, drag = null, pan = null, pendingConnectionS
 let focusMode = false, focusNodeId = null;
 let focusCreatedNodeIds = new Set(), focusCreatedEdgeIds = new Set();
 let graphSaveTimer = null;
+const undoStack = [], redoStack = [];
+let historyCurrent = null, historyGroup = null, historyGroupAt = 0;
+const HISTORY_LIMIT = 100;
 let zoom = 1, lastCW = 800, lastCH = 600, viewMinX = 0, viewMinY = 0;   // 확대율과 뷰박스(저장하지 않음)
 let VERSION_LIST = [];
 
@@ -238,7 +252,57 @@ function initial() {
 }
 function ensureSettings() { S.settings = Object.assign({}, DEFAULT_SETTINGS, S.settings || {}); if (!S.settings.selectionColor || S.settings.selectionColor === '#ea580c') S.settings.selectionColor = '#000000'; delete S.settings.highlightColor; delete S.settings.lineColor; }
 function load() { try { const v = localStorage.getItem(KEY); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
-function save() {
+function snapshotGraph() { return JSON.stringify(S); }
+function updateHistoryButtons() {
+  $('#btnUndo').disabled = undoStack.length === 0;
+  $('#btnRedo').disabled = redoStack.length === 0;
+}
+function resetHistory() {
+  undoStack.length = 0; redoStack.length = 0;
+  historyCurrent = snapshotGraph(); historyGroup = null; historyGroupAt = 0;
+  updateHistoryButtons();
+}
+function recordHistory(group = null) {
+  const next = snapshotGraph();
+  if (historyCurrent === null) { historyCurrent = next; updateHistoryButtons(); return; }
+  if (next === historyCurrent) return;
+  const now = Date.now();
+  if (!group || group !== historyGroup || now - historyGroupAt > 900) {
+    undoStack.push(historyCurrent);
+    if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+  }
+  historyCurrent = next; historyGroup = group; historyGroupAt = now;
+  redoStack.length = 0; updateHistoryButtons();
+}
+async function restoreHistory(snapshot) {
+  S = JSON.parse(snapshot);
+  normalizeNodeStatuses(); ensureSettings();
+  sel = {type:null, id:null};
+  focusMode = false; focusNodeId = null;
+  focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
+  $('#btnFocus').textContent = '포커스 모드';
+  $('#btnFocus').setAttribute('aria-pressed', 'false');
+  historyCurrent = snapshotGraph(); historyGroup = null;
+  try { localStorage.setItem(KEY, historyCurrent); } catch (e) {}
+  clearTimeout(graphSaveTimer);
+  if (location.protocol !== 'file:') await persistGraph(S);
+  await syncNodeFiles();
+  render(); renderPanel(); renderSettings(); fitView(); updateHistoryButtons();
+}
+async function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(historyCurrent);
+  const previous = undoStack.pop();
+  await restoreHistory(previous);
+}
+async function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(historyCurrent);
+  const next = redoStack.pop();
+  await restoreHistory(next);
+}
+function save(historyGroupKey = null) {
+  recordHistory(historyGroupKey);
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
   clearTimeout(graphSaveTimer);
   if (location.protocol !== 'file:') {
@@ -322,17 +386,19 @@ async function loadSavedGraph(localData) {
   S = localHasContent || !serverData ? (localData || initial()) : serverData;
   S.edges = S.edges || []; S.nextId = S.nextId || 1;
   normalizeNodeStatuses(); ensureSettings();
+  resetHistory();
   localStorage.removeItem('causal-editor-active-graph-v1');
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
   await persistGraph(S);
   await syncNodeFiles();
-  render(); renderPanel(); renderSettings();
+  render(); renderPanel(); renderSettings(); fitView();
 }
 
 async function applyGraph(data) {
   S = JSON.parse(JSON.stringify(data));
   S.edges = S.edges || []; S.nextId = S.nextId || 1;
   normalizeNodeStatuses(); ensureSettings();
+  resetHistory();
   focusMode = false; focusNodeId = null;
   focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
   $('#btnFocus').textContent = '포커스 모드';
@@ -996,11 +1062,11 @@ svg.addEventListener('dblclick', e => {
 
 NODE_FIELDS.forEach(([id, key]) => $('#' + id).addEventListener('input', e => {
   const n = node(sel.id); if (!n) return;
-  n[key] = e.target.value; save(); render();
+  n[key] = e.target.value; save(`node:${sel.id}:${key}`); render();
 }));
 EDGE_FIELDS.forEach(([id, key]) => $('#' + id).addEventListener('input', e => {
   const x = edge(sel.id); if (!x) return;
-  x[key] = e.target.value; save(); render();
+  x[key] = e.target.value; save(`edge:${sel.id}:${key}`); render();
 }));
 $('#f_status').addEventListener('change', e => {
   const n = node(sel.id); if (!n) return;
@@ -1027,7 +1093,47 @@ $('#s_canvasPadding').addEventListener('input', e => {
   save(); render();
 });
 $('#btnSettingsDefault').onclick = () => { S.settings = {...DEFAULT_SETTINGS}; save(); render(); renderSettings(); };
-$('#layoutMode').onchange = () => { autoLayout($('#layoutMode').value); fitView(); };
+let activeLayoutMode = 'pyramid';
+function setLayoutOptionsOpen(open) {
+  const button = $('#layoutMode'), options = $('#layoutOptions');
+  options.hidden = !open;
+  button.setAttribute('aria-expanded', String(open));
+  if (open) {
+    const r = button.getBoundingClientRect();
+    options.style.left = `${Math.max(8, Math.min(r.left, innerWidth - Math.max(170, r.width) - 8))}px`;
+    options.style.top = `${r.bottom + 4}px`;
+    options.style.minWidth = `${Math.max(170, r.width)}px`;
+  }
+}
+function applyLayoutMode(mode) {
+  activeLayoutMode = mode;
+  const selected = $('#layoutOptions').querySelector(`[data-layout="${mode}"]`);
+  if (!selected) return;
+  $('#layoutMode').textContent = `${selected.textContent} ▾`;
+  $('#layoutOptions').querySelectorAll('[data-layout]').forEach(option => option.setAttribute('aria-selected', String(option.dataset.layout === mode)));
+  setLayoutOptionsOpen(false);
+  $('#layoutMode').focus();
+  autoLayout(mode); fitView();
+}
+$('#layoutMode').onclick = () => setLayoutOptionsOpen($('#layoutOptions').hidden);
+$('#layoutOptions').addEventListener('click', e => {
+  const option = e.target.closest('[data-layout]');
+  if (option) applyLayoutMode(option.dataset.layout);
+});
+$('#layoutMode').addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault(); setLayoutOptionsOpen(true);
+    $('#layoutOptions').querySelector(`[data-layout="${activeLayoutMode}"]`)?.focus();
+  }
+});
+$('#layoutOptions').addEventListener('keydown', e => {
+  const choices = [...$('#layoutOptions').querySelectorAll('[data-layout]')], i = choices.indexOf(e.target);
+  if (e.key === 'Escape') { setLayoutOptionsOpen(false); $('#layoutMode').focus(); }
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); choices[(i + (e.key === 'ArrowDown' ? 1 : choices.length - 1)) % choices.length]?.focus(); }
+  else if (e.key === 'Home') { e.preventDefault(); choices[0]?.focus(); }
+  else if (e.key === 'End') { e.preventDefault(); choices.at(-1)?.focus(); }
+});
+document.addEventListener('mousedown', e => { if (!e.target.closest('.layout-picker') && !e.target.closest('#layoutOptions')) setLayoutOptionsOpen(false); });
 $('#btnFit').onclick = fitView;
 $('#btnZoom100').onclick = () => { zoom = 1; render(); };
 
@@ -1044,6 +1150,8 @@ $('#stage').addEventListener('wheel', e => {
   stage.scrollTop = (worldY - viewMinY) * zoom - cy;
 }, {passive: false});
 $('#btnFocus').onclick = toggleFocusMode;
+$('#btnUndo').onclick = undo;
+$('#btnRedo').onclick = redo;
 $('#btnSidebar').onclick = () => setSidebarVisible($('aside').hidden, true);
 $('#btnSettings').onclick = () => { renderSettings(); $('#setDlg').showModal(); };
 $('#btnVersions').onclick = () => { renderVersions(); $('#versionDlg').showModal(); };
@@ -1215,6 +1323,8 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
 });
 /* ---------- 시작 ---------- */
@@ -1223,6 +1333,7 @@ S = browserData || initial();
 normalizeNodeStatuses();
 if (!S.nextId) S.nextId = 10;
 ensureSettings();
+resetHistory();
 let sidebarHiddenAtLoad = false;
 try { sidebarHiddenAtLoad = localStorage.getItem(SIDEBAR_KEY) === '1'; } catch (e) {}
 setSidebarVisible(!sidebarHiddenAtLoad);
