@@ -114,7 +114,7 @@
     <li>노드·화살표 선택 후 Delete: 삭제</li>
     <li>노드 역할은 화살표 연결에 따라 자동 결정됩니다. 나가는 화살표만 있으면 시작, 들어오는 화살표만 있으면 목표, 둘 다 있거나 화살표가 없으면 일반입니다</li>
     <li>노드를 선택해 진행 상태(미착수·진행 중·완료·중단·실패)와 메모를 편집합니다. 상태와 자동 역할에 따라 표시가 달라집니다</li>
-    <li>포커스 모드: 버튼을 누른 뒤 시작 노드를 선택하면 화살표 방향으로 이어지는 경로를 표시합니다. 선택 노드로 들어오는 화살표는 경로에 포함하지 않으며, 포커스 중 다른 노드를 선택해도 경로는 고정됩니다. 포커스 종료를 누르면 전체 그래프가 다시 보입니다</li>
+    <li>포커스 모드: 버튼을 누른 뒤 시작 노드를 선택하면 화살표 방향으로 이어지는 경로를 표시합니다. 선택 노드로 들어오는 화살표는 경로에 포함하지 않으며, 포커스 중 다른 노드를 선택해도 경로는 고정됩니다. 새로 만든 노드와 그 연결 화살표는 포커스 종료 전까지 계속 표시되어 편집·삭제할 수 있습니다</li>
     <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양, 선택 강조 색을 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
   </ul>
   <button id="btnHelpClose">닫기</button>
@@ -215,6 +215,7 @@ const svg = $('#canvas');
 
 let S, sel = {type: null, id: null}, drag = null, pan = null, pendingConnectionSource = null;
 let focusMode = false, focusNodeId = null;
+let focusCreatedNodeIds = new Set(), focusCreatedEdgeIds = new Set();
 let graphSaveTimer = null;
 let zoom = 1, lastCW = 800, lastCH = 600, viewMinX = 0, viewMinY = 0;   // 확대율과 뷰박스(저장하지 않음)
 let VERSION_LIST = [];
@@ -324,6 +325,7 @@ async function applyGraph(data) {
   S.edges = S.edges || []; S.nextId = S.nextId || 1;
   normalizeNodeStatuses(); ensureSettings();
   focusMode = false; focusNodeId = null;
+  focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
   $('#btnFocus').textContent = '포커스 모드';
   $('#btnFocus').setAttribute('aria-pressed', 'false');
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
@@ -383,6 +385,7 @@ function render() {
   if (focusNodeId && !node(focusNodeId)) focusNodeId = null;
   const visibleNodeIds = new Set(S.nodes.map(n => n.id));
   const visibleEdgeIds = new Set(S.edges.map(e => e.id));
+  const focusPathEdgeIds = new Set();
   if (focusMode && focusNodeId) {
     visibleNodeIds.clear();
     visibleEdgeIds.clear();
@@ -393,11 +396,18 @@ function render() {
       for (const e of S.edges) {
         if (e.from !== currentId) continue;
         visibleEdgeIds.add(e.id);
+        focusPathEdgeIds.add(e.id);
         if (!visibleNodeIds.has(e.to)) {
           visibleNodeIds.add(e.to);
           queue.push(e.to);
         }
       }
+    }
+    if (sel.type === 'node' && node(sel.id)) visibleNodeIds.add(sel.id);
+    for (const id of focusCreatedNodeIds) if (node(id)) visibleNodeIds.add(id);
+    for (const id of focusCreatedEdgeIds) {
+      const e = edge(id);
+      if (e && visibleNodeIds.has(e.from) && visibleNodeIds.has(e.to)) visibleEdgeIds.add(id);
     }
   }
   $('#stage').style.background = st.bgColor;
@@ -440,7 +450,7 @@ function render() {
     const bStatus = NODE_STATUSES[b.status] || NODE_STATUSES.not_started;
     const sameStatus = a.status === b.status;
     const color = sameStatus ? aStatus.color : bStatus.color;
-    const isFocusedEdge = focusMode && !!focusNodeId;
+    const isFocusedEdge = focusMode && focusPathEdgeIds.has(e.id);
     const stroke = isFocusedEdge ? '#000000' : sameStatus ? color : `url(#grad-${esc(e.id)})`;
     const w = (isFocusedEdge ? 3 : a.status === 'completed' && b.status === 'completed' ? 3 : 1) + (sel.type === 'edge' && sel.id === e.id ? 2 : 0);
     if (!sameStatus) h += `<defs><linearGradient id="grad-${esc(e.id)}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0%" stop-color="${aStatus.color}"/><stop offset="50%" stop-color="${aStatus.color}"/><stop offset="50%" stop-color="${bStatus.color}"/><stop offset="100%" stop-color="${bStatus.color}"/></linearGradient></defs>`;
@@ -533,11 +543,13 @@ function select(type, id) {
 function toggleFocusMode() {
   if (focusMode) {
     focusMode = false; focusNodeId = null;
+    focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
     $('#btnFocus').textContent = '포커스 모드';
     $('#btnFocus').setAttribute('aria-pressed', 'false');
     setFstat('전체 그래프를 표시합니다.');
   } else {
     focusMode = true;
+    focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
     sel = {type: null, id: null};
     focusNodeId = null;
     $('#btnFocus').textContent = '포커스 종료';
@@ -560,26 +572,37 @@ function freeNodeId() {
 function addNode(x, y) {
   const id = freeNodeId();
   S.nodes.push({id, status:'not_started', title:'새 노드', x: Math.max(0, x), y: Math.max(0, y), memo:''});
+  if (focusMode) focusCreatedNodeIds.add(id);
   save(); select('node', id);
 }
 
 function addEdge(a, b) {
   if (!S.edges.some(e => e.from === a && e.to === b)) {
-    S.edges.push({id: 'e' + S.nextId++, from: a, to: b, memo: ''});
+    const newEdge = {id: 'e' + S.nextId++, from: a, to: b, memo: ''};
+    S.edges.push(newEdge);
+    if (focusMode && (focusCreatedNodeIds.has(a) || focusCreatedNodeIds.has(b))) focusCreatedEdgeIds.add(newEdge.id);
     save();
   }
   select('node', b);
 }
 
 function deleteSelected() {
+  const deletedFocusNode = sel.type === 'node' && sel.id === focusNodeId;
   if (sel.type === 'edge') {
     S.edges = S.edges.filter(e => e.id !== sel.id);
+    focusCreatedEdgeIds.delete(sel.id);
   } else if (sel.type === 'node') {
     const n = node(sel.id);
     if (!n) return;
     S.nodes = S.nodes.filter(x => x.id !== n.id);
     S.edges = S.edges.filter(e => e.from !== n.id && e.to !== n.id);
+    focusCreatedNodeIds.delete(n.id);
+    for (const id of [...focusCreatedEdgeIds]) if (!edge(id)) focusCreatedEdgeIds.delete(id);
   } else return;
+  if (deletedFocusNode) {
+    focusNodeId = null;
+    if (focusMode) setFstat('포커스할 노드를 선택하세요.');
+  }
   sel = {type: null, id: null}; save(); render(); renderPanel();
 }
 
