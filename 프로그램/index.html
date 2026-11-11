@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>인과 편집기</title>
+<script src="md-graph.js"></script>
 <style>
   body{margin:0;font-family:system-ui,"Malgun Gothic",sans-serif;background:#f4f5f7;color:#222;height:100vh;display:flex;flex-direction:column}
   header{position:relative;z-index:2;display:flex;flex-wrap:nowrap;gap:8px 10px;align-items:center;padding:9px 14px;background:#fff;border-bottom:1px solid #dce1e8;box-shadow:0 1px 3px #1822300a;overflow-x:auto;scrollbar-width:thin}
@@ -87,13 +88,13 @@
     </div></div></div>
   <div class="toolbar-group"><div class="search-wrap"><input id="nodeSearch" type="search" placeholder="노드 제목·메모 검색" aria-label="노드 제목과 메모 검색" autocomplete="off"><div id="searchResults" role="listbox" aria-label="검색 결과" hidden></div></div></div>
   <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
-  <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReset">초기화</button></div>
+  <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReload" title="노드 파일 폴더를 다시 읽습니다. 다른 기기에서 동기화된 내용을 반영합니다">파일 다시 읽기</button><button id="btnReset">초기화</button></div>
 </header>
 <main>
   <div id="stage"><div id="tip"></div><svg id="canvas" width="2400" height="1600"></svg></div>
   <aside>
     <div id="help" class="hint">
-      인과 그래프 하나를 편집합니다. 그래프 JSON과 노드 Markdown은 노드파일 폴더에 저장됩니다.<br><br>
+      인과 그래프 하나를 편집합니다. 노드 Markdown 파일(노드파일 폴더)이 원본이며, 그래프 JSON은 내부데이터 폴더에 보조로 저장됩니다.<br><br>
       노드나 화살표를 클릭하면 여기에서 내용을 편집할 수 있습니다.<br>
       사용법은 상단의 <b>도움말</b> 버튼을 누르세요.
     </div>
@@ -237,10 +238,15 @@ let S, sel = {type: null, id: null}, drag = null, pan = null, pendingConnectionS
 let focusMode = false, focusNodeId = null;
 let focusCreatedNodeIds = new Set(), focusCreatedEdgeIds = new Set();
 let graphSaveTimer = null;
+let lastEditAt = 0;   // 마지막 편집 시각: 편집 직후에는 파일을 다시 읽지 않습니다
+let mdReadFailed = false;   // 노드 md를 읽지 못한 상태: 이때는 파일과 JSON을 아무것도 쓰지 않습니다
 const undoStack = [], redoStack = [];
 let historyCurrent = null, historyGroup = null, historyGroupAt = 0;
 const HISTORY_LIMIT = 100;
-let zoom = 1, lastCW = 800, lastCH = 600, viewMinX = 0, viewMinY = 0;   // 확대율과 뷰박스(저장하지 않음)
+// 기본 확대율: 안드로이드 앱은 작은 화면에 맞게 shim에서 더 작은 값을 넣습니다. PC는 1입니다.
+const BASE_ZOOM = window.CAUSAL_BASE_ZOOM || 1;
+const FIT_MAX_ZOOM = window.CAUSAL_FIT_MAX_ZOOM || 2;
+let zoom = BASE_ZOOM, lastCW = 800, lastCH = 600, viewMinX = 0, viewMinY = 0;   // 확대율과 뷰박스(저장하지 않음)
 let VERSION_LIST = [];
 
 /* ---------- 데이터 ----------
@@ -302,6 +308,7 @@ async function redo() {
   await restoreHistory(next);
 }
 function save(historyGroupKey = null) {
+  lastEditAt = Date.now();
   recordHistory(historyGroupKey);
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
   clearTimeout(graphSaveTimer);
@@ -312,6 +319,7 @@ function save(historyGroupKey = null) {
   scheduleMd();
 }
 async function persistGraph(data) {
+  if (mdReadFailed) return true;   // md를 못 읽은 상태에서는 JSON 사본도 덮어쓰지 않습니다
   try {
     const r = await fetch('/api/graph', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
     const j = await r.json();
@@ -377,22 +385,89 @@ async function deleteVersionsBulk(ids) {
   setFstat(`버전 ${ids.length - failed}개를 삭제했습니다${failed ? ` (실패 ${failed}개)` : ''}.`);
 }
 
-async function loadSavedGraph(localData) {
+/* 노드 파일(.md)이 그래프의 원본입니다. 시작할 때와 '파일 다시 읽기'를 누를 때 파일에서 그래프를 만듭니다.
+   그래프 JSON(내부데이터/그래프.json)은 설정과 백업을 담는 보조 사본입니다. */
+async function fetchNodeFiles() {
+  const r = await fetch('/api/nodes'), j = await r.json();
+  if (!r.ok || !j.ok) throw new Error(j.error || '노드 파일을 읽지 못했습니다.');
+  return j.files || [];
+}
+async function fetchBackupGraph() {
   const legacyId = localStorage.getItem('causal-editor-active-graph-v1') || '';
   const r = await fetch(`/api/graph?legacy=${encodeURIComponent(legacyId)}`), j = await r.json();
-  if (!r.ok || !j.ok) throw new Error(j.error || '그래프를 읽지 못했습니다.');
-  const serverData = j.data;
-  const localHasContent = !!(localData?.nodes?.length || localData?.edges?.length);
-  S = localHasContent || !serverData ? (localData || initial()) : serverData;
+  if (!r.ok || !j.ok) throw new Error(j.error || '그래프 JSON을 읽지 못했습니다.');
+  return j;   // {data, source: 'internal' | 'legacy' | undefined}
+}
+// 파일 내용만 비교합니다 (반올림한 위치 기준). 같으면 다시 그리지 않습니다.
+const graphSnapshot = g => JSON.stringify([
+  g.nodes.map(n => [n.id, n.status, n.title, Math.round(n.x), Math.round(n.y), n.memo]),
+  g.edges.map(e => [e.from, e.to, e.memo])
+]);
+
+async function loadSavedGraph(localData) {
+  // 그래프의 원본은 노드 md 파일입니다. JSON은 설정을 가져올 때만 쓰고, 내용으로는 쓰지 않습니다.
+  let files = null, loadError = null, backup = null;
+  try { files = await fetchNodeFiles(); } catch (err) { loadError = err; }
+  let j = null;
+  try { j = await fetchBackupGraph(); } catch (err) { j = null; }   // JSON을 못 읽어도 md로 엽니다
+  backup = j && j.data && Array.isArray(j.data.nodes) ? j.data : null;
+  const settingsFrom = backup || localData || null;
+
+  if (loadError) {
+    // md를 읽지 못하면 JSON으로 그래프를 대신하지 않습니다. 빈 화면으로 열고, 파일을 읽기 전까지는 아무것도 저장하지 않습니다.
+    mdReadFailed = true;
+    S = {...initial(), settings: settingsFrom?.settings || {...DEFAULT_SETTINGS}};
+    S.edges = S.edges || []; S.nextId = S.nextId || 1;
+    normalizeNodeStatuses(); ensureSettings(); resetHistory();
+    render(); renderPanel(); renderSettings(); fitView();
+    setFstat(`노드 파일을 읽지 못했습니다. 파일 상태를 확인한 뒤 '파일 다시 읽기'를 누르세요: ${loadError.message}`);
+    return;
+  }
+  mdReadFailed = false;
+
+  if (files.length) {
+    const g = NodeMd.parseNodeFiles(files);
+    S = {nextId: 1, nodes: g.nodes, edges: g.edges, settings: settingsFrom?.settings || {}};
+  } else if (j && j.source === 'legacy' && backup) {
+    S = backup;        // 예전 위치(노드파일/그래프.json)에 있던 그래프를 파일 형식으로 옮깁니다
+  } else {
+    S = {...initial(), settings: settingsFrom?.settings || {...DEFAULT_SETTINGS}};
+  }
   S.edges = S.edges || []; S.nextId = S.nextId || 1;
   normalizeNodeStatuses(); ensureSettings();
   resetHistory();
-  localStorage.removeItem('causal-editor-active-graph-v1');
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
   await persistGraph(S);
   await syncNodeFiles();
   render(); renderPanel(); renderSettings(); fitView();
 }
+
+// 파일을 다시 읽어 화면을 맞춥니다. 편집 직후나 드래그 중에는 건너뜁니다.
+async function reloadFromNodeFiles(manual = false) {
+  if (location.protocol === 'file:') return;
+  if (drag || pan || Date.now() - lastEditAt < 1500) return;
+  let files;
+  try { files = await fetchNodeFiles(); }
+  catch (err) { if (manual) setFstat(`파일 다시 읽기 실패: ${err.message}`); return; }
+  mdReadFailed = false;   // 파일을 읽었으니 저장을 다시 허용합니다
+  if (!files.length) { if (manual) setFstat('노드 파일이 없습니다. 동기화가 끝났는지 확인하세요.'); return; }
+  const g = NodeMd.parseNodeFiles(files);
+  if (graphSnapshot(g) === graphSnapshot(S)) { if (manual) setFstat('노드 파일이 바뀌지 않았습니다.'); return; }
+  S = {...S, nodes: g.nodes, edges: g.edges};
+  normalizeNodeStatuses(); ensureSettings();
+  resetHistory();
+  sel = {type: null, id: null};
+  focusMode = false; focusNodeId = null;
+  focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
+  $('#btnFocus').textContent = '포커스 모드';
+  $('#btnFocus').setAttribute('aria-pressed', 'false');
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  await persistGraph(S);
+  render(); renderPanel();
+  setFstat(`노드 파일에서 다시 읽었습니다 (노드 ${g.nodes.length}개, 화살표 ${g.edges.length}개)`);
+}
+$('#btnReload').onclick = () => reloadFromNodeFiles(true);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) reloadFromNodeFiles(false); });
 
 async function applyGraph(data) {
   S = JSON.parse(JSON.stringify(data));
@@ -746,31 +821,12 @@ function enumeratePaths(limit) {
   return out;
 }
 
-const fileName = n => `n${n.id.slice(1).padStart(4, '0')}_${(n.title || '노드').replace(/[\\/:*?"<>|\s]+/g, '_')}.md`;
+const fileName = n => NodeMd.fileName(n);
 const linkTo = n => `[${n.title}](${encodeURI(fileName(n))})`;
 
+// 형식과 읽기 규칙은 md-graph.js에 있습니다. 노드 파일이 원본이므로 여기서 파일을 쓰는 내용을 만듭니다.
 function nodeMd(n) {
-  const role = nodeKind(n);
-  const kind = role === 'start' ? ' (시작)' : role === 'goal' ? ' (목표)' : '';
-  const status = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
-  const L = [`# ${n.title}${kind}`, '', `## 진행 상태`, '', status.label, ''];
-  if (n.memo) L.push('## 메모', '', n.memo, '');
-
-  const incoming = S.edges.filter(e => e.to === n.id);
-  const outgoing = S.edges.filter(e => e.from === n.id);
-  const arrowLines = (e, other) => {
-    const out = [`- ${linkTo(other)}`];
-    if (e.memo) out.push(`  - 메모: ${e.memo}`);
-    return out;
-  };
-
-  L.push('## 원인 (이 상태로 이어진 화살표)', '');
-  if (!incoming.length) L.push('_없음_');
-  for (const e of incoming) L.push(...arrowLines(e, node(e.from)));
-  L.push('', '## 결과 (이 상태에서 나가는 화살표)', '');
-  if (!outgoing.length) L.push('_없음_');
-  for (const e of outgoing) L.push(...arrowLines(e, node(e.to)));
-  return L.join('\n') + '\n';
+  return NodeMd.toNodeMd(n, S);
 }
 
 function pathsMd() {
@@ -803,6 +859,7 @@ function scheduleMd() { clearTimeout(mdTimer); mdTimer = setTimeout(syncNodeFile
 
 async function syncNodeFiles() {
   if (location.protocol === 'file:') { setFstat('서버 없이 열렸습니다. 실행.bat을 더블클릭해 주세요.'); return; }
+  if (mdReadFailed) return;   // md를 못 읽은 상태에서 쓰면 기존 노드 파일이 지워질 수 있습니다
   const files = S.nodes.map(n => ({name: fileName(n), text: nodeMd(n)}));
   files.push({name: '_경로.md', text: pathsMd()});
   try {
@@ -928,7 +985,7 @@ function autoLayout(mode) {
 
 function fitView() {
   const st = $('#stage');
-  zoom = Math.min(2, (st.clientWidth - 24) / lastCW, (st.clientHeight - 24) / lastCH);
+  zoom = Math.min(FIT_MAX_ZOOM, (st.clientWidth - 24) / lastCW, (st.clientHeight - 24) / lastCH);
   if (!(zoom > 0)) zoom = 1;
   render();
 }
@@ -999,7 +1056,7 @@ $('#stage').addEventListener('contextmenu', e => {
       const D = dims(); addNode(point.x - D.w / 2, point.y - D.h / 2);
     });
     addCanvasMenuAction('전체 그래프 보기', fitView);
-    addCanvasMenuAction('실제 크기', () => { zoom = 1; render(); });
+    addCanvasMenuAction('실제 크기', () => { zoom = BASE_ZOOM; render(); });
     addCanvasMenuAction('도움말', () => $('#helpDlg').showModal());
   }
   menu.hidden = false;
@@ -1135,7 +1192,7 @@ $('#layoutOptions').addEventListener('keydown', e => {
 });
 document.addEventListener('mousedown', e => { if (!e.target.closest('.layout-picker') && !e.target.closest('#layoutOptions')) setLayoutOptionsOpen(false); });
 $('#btnFit').onclick = fitView;
-$('#btnZoom100').onclick = () => { zoom = 1; render(); };
+$('#btnZoom100').onclick = () => { zoom = BASE_ZOOM; render(); };
 
 // Ctrl+휠: 브라우저 배율 대신 캔버스만 조금씩 확대·축소합니다. 커서 아래의 점이 그대로 머물도록 맞춥니다.
 $('#stage').addEventListener('wheel', e => {

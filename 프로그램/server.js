@@ -24,7 +24,10 @@ function readDataFolder() {
 }
 const DATA_DIR = readDataFolder();
 const NODE_DIR = path.join(DATA_DIR, '노드파일');
-const GRAPH_FILE = path.join(NODE_DIR, '그래프.json');
+// 그래프 JSON은 노드파일 폴더 밖의 '내부데이터'에 둡니다. 원본은 노드 Markdown 파일이고, 이 JSON은 설정과 백업용 사본입니다.
+const GRAPH_DIR = path.join(DATA_DIR, '내부데이터');
+const GRAPH_FILE = path.join(GRAPH_DIR, '그래프.json');
+const LEGACY_GRAPH_FILE = path.join(NODE_DIR, '그래프.json');   // 예전 위치 (읽어서 옮긴 뒤 지웁니다)
 const HISTORY_DIR = path.join(DATA_DIR, '변경이력');
 // 이 프로그램이 만든 파일 이름 패턴: n1_제목.md, n12_제목.md, _경로.md
 const OWN_FILE = /^(n\d+_.*|_경로)\.md$/;
@@ -47,11 +50,32 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.method === 'GET' && (req.url === '/api/graph' || req.url.startsWith('/api/graph?'))) {
+  if (req.method === 'GET' && req.url === '/md-graph.js') {
+    res.writeHead(200, {'Content-Type': 'text/javascript; charset=utf-8'});
+    fs.createReadStream(path.join(APP_DIR, 'md-graph.js')).pipe(res);
+    return;
+  }
+
+  // 노드 파일 전체를 읽습니다. 그래프의 원본이므로 편집기는 시작할 때와 '파일 다시 읽기'에 이 목록을 씁니다.
+  if (req.method === 'GET' && req.url === '/api/nodes') {
     try {
       fs.mkdirSync(NODE_DIR, {recursive: true});
+      const files = fs.readdirSync(NODE_DIR)
+        .filter(name => OWN_FILE.test(name) && fs.statSync(path.join(NODE_DIR, name)).isFile())
+        .sort()
+        .map(name => ({name, text: fs.readFileSync(path.join(NODE_DIR, name), 'utf8')}));
+      return sendJson(res, 200, {ok: true, files});
+    } catch (err) { return sendJson(res, 500, {ok: false, error: err.message}); }
+  }
+
+  if (req.method === 'GET' && (req.url === '/api/graph' || req.url.startsWith('/api/graph?'))) {
+    try {
       if (fs.existsSync(GRAPH_FILE)) {
-        return sendJson(res, 200, {ok: true, data: JSON.parse(fs.readFileSync(GRAPH_FILE, 'utf8'))});
+        return sendJson(res, 200, {ok: true, source: 'internal', data: JSON.parse(fs.readFileSync(GRAPH_FILE, 'utf8'))});
+      }
+      if (fs.existsSync(LEGACY_GRAPH_FILE)) {
+        const data = JSON.parse(fs.readFileSync(LEGACY_GRAPH_FILE, 'utf8'));
+        return sendJson(res, 200, {ok: true, source: 'legacy', data});
       }
       const legacyId = new URL(req.url, 'http://localhost').searchParams.get('legacy') || '';
       let legacyFile = '';
@@ -70,7 +94,7 @@ const server = http.createServer((req, res) => {
       if (!legacyFile) return sendJson(res, 200, {ok: true, data: null});
       const data = JSON.parse(fs.readFileSync(legacyFile, 'utf8'));
       if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) throw new Error('기존 그래프 파일이 올바르지 않습니다.');
-      return sendJson(res, 200, {ok: true, data});
+      return sendJson(res, 200, {ok: true, source: 'legacy', data});
     } catch (err) { return sendJson(res, 500, {ok: false, error: err.message}); }
   }
 
@@ -78,8 +102,10 @@ const server = http.createServer((req, res) => {
     readBody(req).then(body => {
       const data = JSON.parse(body);
       if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) throw new Error('잘못된 그래프 데이터입니다.');
-      fs.mkdirSync(NODE_DIR, {recursive: true});
+      fs.mkdirSync(GRAPH_DIR, {recursive: true});
       fs.writeFileSync(GRAPH_FILE, JSON.stringify(data, null, 2), 'utf8');
+      // 예전 위치의 그래프 JSON은 내부데이터로 옮겨졌으므로 노드파일 폴더에서 지웁니다
+      if (fs.existsSync(LEGACY_GRAPH_FILE)) fs.unlinkSync(LEGACY_GRAPH_FILE);
       const legacyDirs = fs.readdirSync(NODE_DIR, {withFileTypes: true})
         .filter(entry => entry.isDirectory() && GRAPH_ID.test(entry.name) && fs.existsSync(path.join(NODE_DIR, entry.name, `${entry.name}.json`)));
       if (legacyDirs.length) {
@@ -238,7 +264,7 @@ const server = http.createServer((req, res) => {
 
   // 프로젝트 폴더 안의 JSON 파일 목록 (불러오기 창에서 사용)
   if (req.method === 'GET' && req.url === '/api/project-json') {
-    const SKIP = new Set(['node_modules', '.venv', '변경이력', '노드파일']);   // 내부 데이터와 변경이력은 목록에서 제외
+    const SKIP = new Set(['node_modules', '.venv', '변경이력', '노드파일', '내부데이터']);   // 내부 데이터와 변경이력은 목록에서 제외
     const found = [];
     try {
       (function walk(dir, depth) {

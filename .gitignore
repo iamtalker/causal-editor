@@ -1,6 +1,7 @@
 # 개인 기록: 서버가 자동으로 만드는 노드 파일 (계획이 들어 있으므로 올리지 않음)
 노드파일/
 변경이력/
+내부데이터/
 
 # 이 편집기로 만드는 개인 문서와 작업 산출물은 여기에 모으고 올리지 않음
 개인자료/
@@ -13,3 +14,7 @@ Thumbs.db
 desktop.ini
 *.log
 node_modules/
+
+# 안드로이드 앱 빌드 산출물 (android/)
+android/www/
+android/build.log
