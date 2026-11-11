@@ -5,6 +5,18 @@
 window.CAUSAL_BASE_ZOOM = 0.7;
 window.CAUSAL_FIT_MAX_ZOOM = 0.7;
 
+// 뒤로 가기(MainActivity가 호출): 열린 대화상자나 메뉴를 먼저 닫습니다.
+// 닫을 것이 없으면 false를 돌려주고, 그때 앱이 종료 처리를 합니다.
+window.__androidBack = function () {
+  const open = [...document.querySelectorAll('dialog[open]')];
+  if (open.length) { open[open.length - 1].close(); return true; }
+  for (const id of ['canvasMenu', 'layoutOptions', 'searchResults']) {
+    const el = document.getElementById(id);
+    if (el && !el.hidden) { el.hidden = true; return true; }
+  }
+  return false;
+};
+
 (function () {
   const DEFAULT_DIR = '/storage/emulated/0/Documents/인과편집기';
   const ROOT = '/storage/emulated/0';

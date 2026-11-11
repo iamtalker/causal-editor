@@ -1316,6 +1316,16 @@ async function browseFolder(p) {
   }
 }
 $('#btnDataFolderPick').onclick = async () => {
+  // 안드로이드: 기기의 기본 파일 탐색기로 고릅니다 (SD 카드 포함). PC는 아래의 폴더 창을 씁니다.
+  if (window.Capacitor && window.Capacitor.nativePromise) {
+    try {
+      const picked = await window.Capacitor.nativePromise('DataFiles', 'pickFolder', {});
+      await saveDataFolder(picked.path);
+    } catch (err) {
+      setFstat(`폴더를 고르지 않았습니다: ${err.message || err}`);
+    }
+    return;
+  }
   const d = await (await fetch('/api/data-folder')).json();
   $('#folderDlg').showModal();
   await browseFolder(d.active || '');
