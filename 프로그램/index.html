@@ -450,8 +450,16 @@ async function reloadFromNodeFiles(manual = false) {
   try { files = await fetchNodeFiles(); }
   catch (err) { if (manual) setFstat(`파일 다시 읽기 실패: ${err.message}`); return; }
   mdReadFailed = false;   // 파일을 읽었으니 저장을 다시 허용합니다
-  if (!files.length) { if (manual) setFstat('노드 파일이 없습니다. 동기화가 끝났는지 확인하세요.'); return; }
-  const g = NodeMd.parseNodeFiles(files);
+  // 파일이 하나도 없으면: 자동 읽기에서는 그대로 둡니다(동기화 중일 수 있음). 직접 누른 경우에만 확인 후 화면을 비웁니다.
+  if (!files.length) {
+    if (!manual) return;
+    if (!S.nodes.length) { setFstat('노드 파일이 없습니다. 화면도 비어 있습니다.'); return; }
+    if (!confirm('노드 파일이 하나도 없습니다. 화면의 노드도 모두 지울까요?\n노드 파일이 원본이므로 파일이 없는 상태가 그대로 반영됩니다.')) {
+      setFstat('노드 파일이 없지만 화면은 그대로 두었습니다.');
+      return;
+    }
+  }
+  const g = files.length ? NodeMd.parseNodeFiles(files) : {nodes: [], edges: []};
   if (graphSnapshot(g) === graphSnapshot(S)) { if (manual) setFstat('노드 파일이 바뀌지 않았습니다.'); return; }
   S = {...S, nodes: g.nodes, edges: g.edges};
   normalizeNodeStatuses(); ensureSettings();
@@ -856,7 +864,7 @@ function download(name, text, type) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-/* 노드 파일 자동 저장: 같은 폴더의 server.js(실행.bat으로 시작)가 받아서 '노드파일' 폴더에 씁니다.
+/* 노드 파일 자동 저장: 같은 폴더의 server.js(인과편집기.bat으로 시작)가 받아서 '노드파일' 폴더에 씁니다.
    페이지를 file://로 직접 열면 서버가 없어 저장되지 않습니다. */
 let mdTimer = null;
 
@@ -865,7 +873,7 @@ const setFstat = t => { $('#fstat').textContent = t; };
 function scheduleMd() { clearTimeout(mdTimer); mdTimer = setTimeout(syncNodeFiles, 400); }
 
 async function syncNodeFiles() {
-  if (location.protocol === 'file:') { setFstat('서버 없이 열렸습니다. 실행.bat을 더블클릭해 주세요.'); return; }
+  if (location.protocol === 'file:') { setFstat('서버 없이 열렸습니다. 인과편집기.bat을 더블클릭해 주세요.'); return; }
   if (mdReadFailed) return;   // md를 못 읽은 상태에서 쓰면 기존 노드 파일이 지워질 수 있습니다
   const files = S.nodes.map(n => ({name: fileName(n), text: nodeMd(n)}));
   files.push({name: '_경로.md', text: pathsMd()});
@@ -879,7 +887,7 @@ async function syncNodeFiles() {
     if (!j.ok) throw new Error(j.error);
     setFstat(`노드파일 ${j.count}개 자동 저장됨 (${new Date().toLocaleTimeString()})`);
   } catch (err) {
-    setFstat('자동 저장 실패: 실행.bat으로 연 페이지인지 확인하세요.');
+    setFstat('자동 저장 실패: 인과편집기.bat으로 연 페이지인지 확인하세요.');
   }
 }
 
@@ -1376,7 +1384,7 @@ $('#btnAdd').onclick = () => addNode(60 + Math.random() * 300, 60 + Math.random(
 $('#btnDelNode').onclick = deleteSelected;
 $('#btnOpenMd').onclick = async () => {
   const n = node(sel.id); if (!n) return;
-  if (location.protocol === 'file:') { setFstat('서버 없이 열렸습니다. 실행.bat으로 연 페이지에서 눌러 주세요.'); return; }
+  if (location.protocol === 'file:') { setFstat('서버 없이 열렸습니다. 인과편집기.bat으로 연 페이지에서 눌러 주세요.'); return; }
   try {
     const r = await fetch('/api/open', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: fileName(n)})});
     const j = await r.json();

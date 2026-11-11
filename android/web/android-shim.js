@@ -134,10 +134,13 @@ window.CAUSAL_FIT_MAX_ZOOM = 0.7;
     if (method === 'GET' && path === '/api/folders') {
       const current = params.get('path') || ROOT;
       const {dirs} = await native('list', {path: current});
-      const list = dirs.filter(d => !d.name.startsWith('.'))
+      const list = dirs.filter(d => !d.name.startsWith('.') && d.name !== 'self')
         .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
         .map(d => ({name: d.name, path: d.path}));
-      const parent = current === ROOT ? '' : (current.slice(0, current.lastIndexOf('/')) || ROOT);
+      // 위로: 내장 저장소 → /storage(저장소 목록, SD 카드 볼륨이 여기 보입니다) → 맨 위는 없음
+      const parent = current === '/storage' ? ''
+        : current === ROOT ? '/storage'
+        : (current.slice(0, current.lastIndexOf('/')) || '/storage');
       return reply(200, {ok: true, current, parent, dirs: list});
     }
     if (method === 'GET' && path === '/api/data-folder') {

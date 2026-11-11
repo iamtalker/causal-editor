@@ -34,8 +34,16 @@ public class DataFilesPlugin extends Plugin {
         if (p == null || p.isEmpty()) throw new IOException("경로가 비어 있습니다.");
         File f = new File(p).getCanonicalFile();
         String c = f.getPath();
-        if (!(c.equals(ROOT) || c.startsWith(ROOT + "/"))) throw new IOException("허용되지 않은 경로입니다.");
+        if (!allowed(c)) throw new IOException("허용되지 않은 경로입니다.");
         return f;
+    }
+
+    // 허용 범위: 내장 저장소(/storage/emulated/0 안), 저장소 목록(/storage, 폴더 고르기용),
+    // 그리고 SD 카드 같은 외부 저장소(/storage/<볼륨 이름> 안). 'self'는 제외합니다.
+    private static boolean allowed(String c) {
+        if (c.equals(ROOT) || c.startsWith(ROOT + "/")) return true;
+        if (c.equals("/storage")) return true;
+        return c.matches("^/storage/(?!self(/|$))[^/]+(/.*)?$");
     }
 
     private String needAccess() {
