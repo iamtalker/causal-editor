@@ -6,7 +6,6 @@
 // copy-web.js가 index.html에 끼워 넣습니다.
 (function () {
   const REPO = 'iamtalker/causal-editor-android';
-  const TOKEN_KEY = 'causal-android-update-token';
   const AUTO_KEY = 'causal-android-auto-update';          // '0'이면 자동 확인을 끔
   const CHECKED_KEY = 'causal-android-update-checked';    // 마지막 확인 시각(밀리초)
   const LAST_VERSION_KEY = 'causal-android-last-version'; // 마지막으로 켜진 버전
@@ -22,7 +21,6 @@
     get(key, fallback) { try { const v = localStorage.getItem(key); return v === null ? fallback : v; } catch (e) { return fallback; } },
     set(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* 저장이 막혀도 이번 실행에는 동작합니다 */ } }
   };
-  const getToken = () => store.get(TOKEN_KEY, '');
   const autoOn = () => store.get(AUTO_KEY, '1') !== '0';
 
   // 'v1.1.0' 또는 '1.0' 같은 버전을 숫자 배열로 바꿉니다.
@@ -46,8 +44,6 @@
     '<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-bottom:10px">',
     '  <input id="updAuto" type="checkbox"> 앱을 열 때 6시간마다 새 버전 확인',
     '</label>',
-    '<label style="display:block;font-size:13px;margin-bottom:4px">GitHub 읽기 토큰 (비공개 저장소용, 이 기기에만 저장됩니다)</label>',
-    '<input id="updToken" type="password" autocomplete="off" style="width:100%;box-sizing:border-box;padding:7px;border:1px solid #cbd2dc;border-radius:7px;font:inherit;margin-bottom:10px">',
     '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">',
     '  <button id="updCheck" type="button">업데이트 확인</button>',
     '  <button id="updAction" type="button" hidden></button>',
@@ -143,7 +139,6 @@
   function hideBanner() { if (banner) banner.style.display = 'none'; }
 
   async function openDialog() {
-    $('updToken').value = getToken();
     $('updAuto').checked = autoOn();
     showProgress(false);
     $('updNotes').hidden = true;
@@ -161,8 +156,6 @@
 
   // 릴리즈를 확인합니다. silent 이면 결과를 띠로만 알립니다(실패해도 조용히 넘깁니다).
   async function check({silent = false} = {}) {
-    const token = silent ? getToken() : $('updToken').value.trim();
-    if (!silent) store.set(TOKEN_KEY, token);
     if (!silent) {
       $('updCheck').disabled = true;
       setAction(null);
@@ -171,7 +164,8 @@
       setStatus('업데이트를 확인하는 중…');
     }
     try {
-      const info = await updater('checkLatest', {repo: REPO, token});
+      // 저장소가 공개라서 토큰 없이 확인합니다
+      const info = await updater('checkLatest', {repo: REPO, token: ''});
       store.set(CHECKED_KEY, String(Date.now()));
       latest = info;
       if (silent) {
@@ -204,7 +198,6 @@
 
   async function download() {
     if (!latest) return;
-    const token = $('updToken').value.trim();
     const info = latest;
     setAction(null);
     $('updCheck').disabled = true;
@@ -213,7 +206,7 @@
     setStatus('다운로드를 시작합니다…');
     startPolling();
     try {
-      const file = await updater('download', {url: info.assetUrl, token, fileName: info.assetName});
+      const file = await updater('download', {url: info.assetUrl, token: '', fileName: info.assetName});
       stopPolling();
       $('updBar').style.width = '100%';
       $('updProgressText').textContent = `다운로드 완료 (${mb(file.size)})`;

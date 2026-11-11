@@ -5,7 +5,7 @@
 ## 구조
 
 - `web/android-shim.js` : `/api/*` 요청을 기기 파일 작업으로 바꿔 주는 어댑터 (`server.js`와 같은 응답 형식)
-- `web/android-touch.js` : 터치 조작 (노드 끌기, 화면 밀기, 두 손가락 확대·축소, 빈 곳 두 번 탭으로 노드 추가)
+- `web/android-touch.js` : 터치 조작 (노드 끌기, 화면 밀기, 두 손가락 확대·축소, 빈 곳 두 번 탭으로 노드 추가, 노드의 제목 자리를 탭하면 제목 편집, 메모 자리를 탭하면 메모 편집)
 - `프로그램/md-graph.js` : 노드 Markdown 파일 ↔ 그래프 변환기. PC와 안드로이드가 같은 파일을 씁니다 (`copy-web.js`가 복사)
 - `native/DataFilesPlugin.java` : 내장 저장소 파일 읽기·쓰기·목록, Markdown 열기 플러그인 (허용 범위는 `/storage/emulated/0` 안)
 - `native/UpdatePlugin.java` : 앱 업데이트 확인·다운로드·설치 세션과 알림
@@ -54,7 +54,7 @@ npm run build:apk
 - 설치 전에 "출처를 알 수 없는 앱 설치"를 이 앱에 허용해야 합니다. 허용 화면은 앱 안의 버튼으로 바로 열립니다.
 - 새 버전으로 켜지면 '앱 업데이트 완료' 알림이 뜨고, 앱 화면 위에도 한 번 알려 줍니다.
 - 알림은 Android 13 이상에서 알림 권한을 허용해야 보입니다. 권한이 없어도 설치는 진행됩니다.
-- 현재 최신 릴리즈: v1.2.0 (빌드 7)
+- 현재 최신 릴리즈: v1.2.1 (빌드 8)
 
 릴리즈 목록: https://github.com/iamtalker/causal-editor-android/releases
 

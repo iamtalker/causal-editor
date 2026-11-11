@@ -530,9 +530,9 @@ function analyze() {
 }
 
 /* ---------- 렌더링 ---------- */
-function render() {
-  const g = analyze(), st = S.settings, D = dims(), W = D.w, H = D.h, selectionColor = st.selectionColor;
-  if (focusNodeId && !node(focusNodeId)) focusNodeId = null;
+// 화면에 보이는 노드·화살표 범위. 포커스 모드이면 포커스 경로와 새로 만든 항목만 보입니다.
+// render()와 포커스 안에서의 자동 배열이 같이 씁니다.
+function visibleSets() {
   const visibleNodeIds = new Set(S.nodes.map(n => n.id));
   const visibleEdgeIds = new Set(S.edges.map(e => e.id));
   const focusPathEdgeIds = new Set();
@@ -560,6 +560,13 @@ function render() {
       if (e && visibleNodeIds.has(e.from) && visibleNodeIds.has(e.to)) visibleEdgeIds.add(id);
     }
   }
+  return {visibleNodeIds, visibleEdgeIds, focusPathEdgeIds};
+}
+
+function render() {
+  const g = analyze(), st = S.settings, D = dims(), W = D.w, H = D.h, selectionColor = st.selectionColor;
+  if (focusNodeId && !node(focusNodeId)) focusNodeId = null;
+  const {visibleNodeIds, visibleEdgeIds, focusPathEdgeIds} = visibleSets();
   $('#stage').style.background = st.bgColor;
   const markerColors = new Set(Object.values(NODE_STATUSES).map(status => status.color));
   let h = `<defs>${[...markerColors].map(color => `<marker id="arr-${color.slice(1)}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="${color}"/></marker>`).join('')}<marker id="arr-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#000000"/></marker></defs>`;
@@ -877,7 +884,8 @@ async function syncNodeFiles() {
 }
 
 /* ---------- 자동 정렬 · 화면 맞춤 ---------- */
-function autoLayout(mode) {
+// 배열 본체. S.nodes와 S.edges가 배열할 범위를 가리키는 동안 실행합니다 (autoLayout이 맞춥니다).
+function layoutNodes(mode) {
   const W = dims().w, H = dims().h, N = S.nodes.length;
   if (!N) return;
   // 화살표를 따라 시작 노드에서 계산한 단계. 정렬마다 좌우 또는 상하 흐름의 기준으로 씁니다.
@@ -979,6 +987,20 @@ function autoLayout(mode) {
         list.forEach((n, i) => { n.x = 40 + L * (W + 80); n.y = centerY - (list.length - 1) * (H + 40) / 2 + i * (H + 40); });
       }
     }
+  }
+}
+
+// 정렬 메뉴에서 고른 모양대로 배열합니다. 포커스 모드이면 포커스로 보이는 노드와 화살표만 배열합니다.
+function autoLayout(mode) {
+  const allNodes = S.nodes, allEdges = S.edges;
+  if (focusMode && focusNodeId) {
+    const {visibleNodeIds, visibleEdgeIds} = visibleSets();
+    S.nodes = allNodes.filter(n => visibleNodeIds.has(n.id));
+    S.edges = allEdges.filter(e => visibleEdgeIds.has(e.id) && visibleNodeIds.has(e.from) && visibleNodeIds.has(e.to));
+    try { layoutNodes(mode); }
+    finally { S.nodes = allNodes; S.edges = allEdges; }
+  } else {
+    layoutNodes(mode);
   }
   save(); render();
 }

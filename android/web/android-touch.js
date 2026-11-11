@@ -151,7 +151,40 @@
     // 탭: 원래 마우스 흐름을 실행합니다. 이 시점에는 아직 그래프를 다시 그리지 않았으므로 대상이 남아 있습니다.
     fire('mousedown', t.clientX, t.clientY, g.target);
     fire('mouseup', t.clientX, t.clientY, window);
+    // 노드 상자의 제목 자리를 탭하면 제목, 메모 자리를 탭하면 메모 입력칸으로 바로 갑니다.
+    if (g.kind === 'node') {
+      const field = nodeFieldAt(g.node, t);
+      if (field) focusNodeField(field);
+    }
   }, {passive: false});
+
+  // 노드 안의 위치(상자 기준)로 제목(title)·메모(memo) 자리를 나눕니다. index.html의 render()와 같은 배치입니다.
+  function nodeFieldAt(n, t) {
+    const p = svgPoint({clientX: t.clientX, clientY: t.clientY});
+    const x = p.x - n.x, y = p.y - n.y;
+    const D = dims();
+    if (S.settings.shape === 'circle') {
+      if (x < 0 || x > D.w || y < 0 || y > D.h) return null;
+      if (y < D.h / 2) return 'title';
+      return y < D.h / 2 + 28 ? 'memo' : null;
+    }
+    if (x < 0 || x > D.w || y < 0 || y > D.h) return null;
+    if (y < 46) return 'title';          // 제목 줄 (22, 39 근처)
+    if (y < 70) return 'memo';           // 메모 줄 (58 근처)
+    return null;                         // 상태 표시 등 나머지 자리
+  }
+
+  // 사이드 패널(노드 편집 칸)을 열고 해당 입력칸에 커서를 둡니다.
+  function focusNodeField(field) {
+    setTimeout(() => {
+      setSidebarVisible(true);
+      const el = document.getElementById(field === 'title' ? 'f_title' : 'f_memo');
+      if (!el) return;
+      el.focus();
+      try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) { /* 일부 입력칸은 커서 위치를 지원하지 않습니다 */ }
+      el.scrollIntoView({block: 'center'});
+    }, 0);
+  }
 
   window.addEventListener('touchcancel', (e) => {
     gesture = null;
