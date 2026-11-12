@@ -948,29 +948,21 @@ function layoutTree(bottomUp) {
   // 루트에서 닿지 않는 노드(순환 등)는 따로 트리를 만듭니다.
   for (const id of byPosition(S.nodes.map(n => n.id))) if (!placed.has(id)) grow(id);
 
-  const span = new Map();
-  const measure = (id) => {
-    const cs = children.get(id) || [];
-    const w = cs.length ? cs.reduce((sum, c) => sum + measure(c), 0) : 1;
-    span.set(id, w);
-    return w;
-  };
-  const maxDepth = Math.max(0, ...depth.values());
-  const place = (id, left) => {
-    const n = byId.get(id), w = span.get(id);
-    n.x = Math.round(40 + (left + (w - 1) / 2) * COL);
-    const d = depth.get(id);
-    n.y = Math.round(40 + (bottomUp ? maxDepth - d : d) * ROW);
-    let x = left;
-    for (const c of children.get(id) || []) { place(c, x); x += span.get(c); }
-  };
-  let cursor = 0;
+  // 아웃라이너처럼 한 줄에 노드 하나씩 위에서 아래로 쌓습니다. 깊이만큼 오른쪽으로 들여씁니다.
+  // 바텀업은 같은 순서를 아래에서 위로 쌓습니다.
+  const INDENT = 56;
+  const order = [];
+  const visit = (id) => { order.push(id); for (const c of children.get(id) || []) visit(c); };
   const rootIds = [...new Set(S.nodes.map(n => n.id).filter(id => depth.get(id) === 0))];
-  for (const id of byPosition(rootIds)) {
-    const w = measure(id);
-    place(id, cursor);
-    cursor += w + 1;
-  }
+  for (const id of byPosition(rootIds)) visit(id);
+  const ROWGAP = 26;
+  const rowH = H + ROWGAP;
+  order.forEach((id, row) => {
+    const n = byId.get(id);
+    const r = bottomUp ? order.length - 1 - row : row;
+    n.x = Math.round(40 + depth.get(id) * INDENT);
+    n.y = Math.round(40 + r * rowH);
+  });
 }
 
 function layoutNodes(mode) {
