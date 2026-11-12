@@ -1,8 +1,0 @@
-{
-  "appId": "com.causaleditor.app",
-  "appName": "인과 편집기",
-  "webDir": "www",
-  "server": {
-    "androidScheme": "https"
-  }
-}

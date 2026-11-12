@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">인과 편집기</string>
-    <string name="title_activity_main">인과 편집기</string>
-    <string name="package_name">com.causaleditor.app</string>
-    <string name="custom_url_scheme">com.causaleditor.app</string>
-</resources>
