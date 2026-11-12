@@ -85,7 +85,7 @@
   <div class="toolbar-group"><h1>인과 편집기</h1><button id="btnHelp">도움말</button></div>
   <div class="toolbar-group"><button id="btnAdd">노드 추가</button><div class="toolbar-group history-buttons" aria-label="편집 기록"><button id="btnUndo" type="button" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기" disabled>↶</button><button id="btnRedo" type="button" title="다시 실행 (Ctrl+Y 또는 Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↷</button></div>
     <div class="layout-picker"><button id="layoutMode" type="button" title="정렬 방식을 선택하면 바로 적용됩니다" aria-haspopup="listbox" aria-expanded="false">피라미드 ▾</button><div id="layoutOptions" role="listbox" aria-label="정렬 방식" hidden>
-      <button type="button" role="option" data-layout="pyramid" aria-selected="true">피라미드</button><button type="button" role="option" data-layout="inversePyramid" aria-selected="false">역피라미드</button><button type="button" role="option" data-layout="diamond" aria-selected="false">다이아몬드</button><button type="button" role="option" data-layout="circle" aria-selected="false">원형</button><button type="button" role="option" data-layout="grid" aria-selected="false">격자</button>
+      <button type="button" role="option" data-layout="pyramid" aria-selected="true">피라미드</button><button type="button" role="option" data-layout="inversePyramid" aria-selected="false">역피라미드</button><button type="button" role="option" data-layout="diamond" aria-selected="false">다이아몬드</button><button type="button" role="option" data-layout="circle" aria-selected="false">원형</button><button type="button" role="option" data-layout="grid" aria-selected="false">격자</button><button type="button" role="option" data-layout="treeDown" aria-selected="false">트리 탑다운</button><button type="button" role="option" data-layout="treeUp" aria-selected="false">트리 바텀업</button>
     </div></div></div>
   <div class="toolbar-group"><label title="선택한 상태가 아닌 노드와 화살표는 흐리게 표시됩니다">상태 보기 <select id="statusFilter"><option value="all">전체</option><option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option></select></label></div>
   <div class="toolbar-group"><div class="search-wrap"><input id="nodeSearch" type="search" placeholder="노드 제목·메모 검색" aria-label="노드 제목과 메모 검색" autocomplete="off"><div id="searchResults" role="listbox" aria-label="검색 결과" hidden></div></div></div>
@@ -901,6 +901,70 @@ async function syncNodeFiles() {
 
 /* ---------- 자동 정렬 · 화면 맞춤 ---------- */
 // 배열 본체. S.nodes와 S.edges가 배열할 범위를 가리키는 동안 실행합니다 (autoLayout이 맞춥니다).
+// 트리 정렬(탑다운·바텀업): 원인 노드 아래(탑다운)나 위(바텀업)에 결과 노드를 모아 배치합니다.
+// 아웃라이너처럼 부모가 자식들의 가운데에 오고, 형제들은 가로로 나란히 놓입니다.
+// 포커스 모드에서는 포커스 노드가 루트입니다. 한 노드가 여러 원인을 가지면 먼저 만난 원인 아래에만 배치하고, 나머지 화살표는 그대로 둡니다.
+function layoutTree(bottomUp) {
+  const W = dims().w, H = dims().h, COL = W + 40, ROW = H + 70;
+  const byId = new Map(S.nodes.map(n => [n.id, n]));
+  const kids = new Map(), hasIn = new Set();
+  for (const e of S.edges) {
+    if (!byId.has(e.from) || !byId.has(e.to)) continue;
+    pushTo(kids, e.from, e.to);
+    hasIn.add(e.to);
+  }
+  const byPosition = ids => ids.sort((a, b) => byId.get(a).y - byId.get(b).y || byId.get(a).x - byId.get(b).x);
+  let roots;
+  if (focusMode && focusNodeId && byId.has(focusNodeId)) roots = [focusNodeId];
+  else {
+    roots = startNodes().map(n => n.id);
+    if (!roots.length) roots = S.nodes.filter(n => !hasIn.has(n.id)).map(n => n.id);
+  }
+  const placed = new Set(), children = new Map(), depth = new Map();
+  const grow = (rootId) => {
+    placed.add(rootId);
+    depth.set(rootId, 0);
+    const queue = [rootId];
+    for (let i = 0; i < queue.length; i++) {
+      const u = queue[i];
+      for (const v of byPosition([...new Set(kids.get(u) || [])])) {
+        if (placed.has(v)) continue;
+        placed.add(v);
+        depth.set(v, depth.get(u) + 1);
+        pushTo(children, u, v);
+        queue.push(v);
+      }
+    }
+  };
+  for (const id of byPosition([...roots])) if (!placed.has(id)) grow(id);
+  // 루트에서 닿지 않는 노드(순환 등)는 따로 트리를 만듭니다.
+  for (const id of byPosition(S.nodes.map(n => n.id))) if (!placed.has(id)) grow(id);
+
+  const span = new Map();
+  const measure = (id) => {
+    const cs = children.get(id) || [];
+    const w = cs.length ? cs.reduce((sum, c) => sum + measure(c), 0) : 1;
+    span.set(id, w);
+    return w;
+  };
+  const maxDepth = Math.max(0, ...depth.values());
+  const place = (id, left) => {
+    const n = byId.get(id), w = span.get(id);
+    n.x = Math.round(40 + (left + (w - 1) / 2) * COL);
+    const d = depth.get(id);
+    n.y = Math.round(40 + (bottomUp ? maxDepth - d : d) * ROW);
+    let x = left;
+    for (const c of children.get(id) || []) { place(c, x); x += span.get(c); }
+  };
+  let cursor = 0;
+  const rootIds = [...new Set(S.nodes.map(n => n.id).filter(id => depth.get(id) === 0))];
+  for (const id of byPosition(rootIds)) {
+    const w = measure(id);
+    place(id, cursor);
+    cursor += w + 1;
+  }
+}
+
 function layoutNodes(mode) {
   const W = dims().w, H = dims().h, N = S.nodes.length;
   if (!N) return;
@@ -918,6 +982,7 @@ function layoutNodes(mode) {
   const maxL = Math.max(0, ...level.values());
   for (const n of S.nodes) if (!level.has(n.id)) level.set(n.id, maxL + 1);
   const goals = goalNodes();
+  if (mode === 'treeDown' || mode === 'treeUp') { layoutTree(mode === 'treeUp'); return; }
   if (mode === 'circle') {
     const R = Math.max(220, N * (Math.max(W, H) + 30) / (2 * Math.PI));
     const cx = R + W / 2 + 40, cy = R + H / 2 + 40;
