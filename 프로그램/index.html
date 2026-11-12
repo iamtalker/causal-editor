@@ -955,6 +955,11 @@ function layoutTree(bottomUp) {
   const visit = (id) => { order.push(id); for (const c of children.get(id) || []) visit(c); };
   const rootIds = [...new Set(S.nodes.map(n => n.id).filter(id => depth.get(id) === 0))];
   for (const id of byPosition(rootIds)) visit(id);
+  // 목표 노드(들어오는 화살표만 있는 노드)는 항상 맨 끝 줄에 모아서, 시작과 끝이 양 끝에 오게 합니다.
+  const goalSet = new Set(goalNodes().map(n => n.id));
+  const orderNoGoal = order.filter(id => !goalSet.has(id)), orderGoal = order.filter(id => goalSet.has(id));
+  order.length = 0;
+  order.push(...orderNoGoal, ...orderGoal);
   const ROWGAP = 26;
   const rowH = H + ROWGAP;
   order.forEach((id, row) => {
