@@ -87,7 +87,7 @@
     <div class="layout-picker"><button id="layoutMode" type="button" title="정렬 방식을 선택하면 바로 적용됩니다" aria-haspopup="listbox" aria-expanded="false">피라미드 ▾</button><div id="layoutOptions" role="listbox" aria-label="정렬 방식" hidden>
       <button type="button" role="option" data-layout="pyramid" aria-selected="true">피라미드</button><button type="button" role="option" data-layout="inversePyramid" aria-selected="false">역피라미드</button><button type="button" role="option" data-layout="diamond" aria-selected="false">다이아몬드</button><button type="button" role="option" data-layout="circle" aria-selected="false">원형</button><button type="button" role="option" data-layout="grid" aria-selected="false">격자</button><button type="button" role="option" data-layout="treeDown" aria-selected="false">트리 탑다운</button><button type="button" role="option" data-layout="treeUp" aria-selected="false">트리 바텀업</button>
     </div></div></div>
-  <div class="toolbar-group"><label title="선택한 상태가 아닌 노드와 화살표는 흐리게 표시됩니다">상태 보기 <select id="statusFilter"><option value="all">전체</option><option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option></select></label></div>
+  <div class="toolbar-group"><label title="선택한 상태가 아닌 노드와 화살표는 흐리게 표시됩니다">상태 보기 <select id="statusFilter"><option value="all">전체</option><option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option></select></label><label title="노드를 제목 한 줄짜리 작은 상자로 보여 줍니다. 포커스 모드와 트리 정렬을 함께 쓰면 시작에서 목표까지 한 줄처럼 보입니다"><input type="checkbox" id="compactView"> 간편 보기</label></div>
   <div class="toolbar-group"><div class="search-wrap"><input id="nodeSearch" type="search" placeholder="노드 제목·메모 검색" aria-label="노드 제목과 메모 검색" autocomplete="off"><div id="searchResults" role="listbox" aria-label="검색 결과" hidden></div></div></div>
   <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
   <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReload" title="노드 파일 폴더를 다시 읽습니다. 다른 기기에서 동기화된 내용을 반영합니다">파일 다시 읽기</button><button id="btnReset">초기화</button></div>
@@ -241,6 +241,7 @@ let S, sel = {type: null, id: null}, drag = null, pan = null, pendingConnectionS
 let focusMode = false, focusNodeId = null;
 // 상태 보기: 선택한 상태가 아닌 노드와 그 화살표를 흐리게 표시합니다. 화면 보기 설정이라 파일에 저장하지 않습니다.
 let statusFilter = 'all';
+let compactView = false;
 const isDimmedByStatus = n => statusFilter !== 'all' && n.status !== statusFilter;
 let focusCreatedNodeIds = new Set(), focusCreatedEdgeIds = new Set();
 let graphSaveTimer = null;
@@ -521,7 +522,9 @@ function nodeKind(n) {
 }
 const startNodes = () => S.nodes.filter(n => nodeKind(n) === 'start');
 const goalNodes = () => S.nodes.filter(n => nodeKind(n) === 'goal');
-const dims = () => S.settings.shape === 'circle' ? CIRCLE : RECT;
+// 간편 보기: 제목 한 줄만 있는 작은 상자로 그립니다. 화면 설정이라 파일에 저장하지 않습니다.
+const COMPACT = {w: 170, h: 34};
+const dims = () => compactView ? COMPACT : S.settings.shape === 'circle' ? CIRCLE : RECT;
 const pushTo = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
 
 function reach(starts, adj) {
@@ -630,7 +633,7 @@ function render() {
     h += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${w}" marker-end="${isFocusedEdge ? 'url(#arr-focus)' : `url(#arr-${color.slice(1)})`}"/>`;
     const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 8;
     const edgeMemoSummary = e.memo ? titleLines(e.memo, 14, 1)[0] : '';
-    if (edgeMemoSummary) h += `<text x="${mx}" y="${my}" font-size="11" fill="#222" text-anchor="middle" paint-order="stroke" stroke="${st.bgColor}" stroke-width="4" pointer-events="none"><title>${esc(e.memo)}</title>${esc(edgeMemoSummary)}</text>`;
+    if (edgeMemoSummary && !compactView) h += `<text x="${mx}" y="${my}" font-size="11" fill="#222" text-anchor="middle" paint-order="stroke" stroke="${st.bgColor}" stroke-width="4" pointer-events="none"><title>${esc(e.memo)}</title>${esc(edgeMemoSummary)}</text>`;
     h += `<path d="${d}" fill="none" stroke="transparent" stroke-width="14" data-edge="${e.id}" style="cursor:pointer"/></g>`;
   }
 
@@ -646,7 +649,10 @@ function render() {
     const titleRows = titleLines(n.title, st.shape === 'circle' ? 8 : 12);
     const memoRows = n.memo ? titleLines(n.memo, st.shape === 'circle' ? 8 : 16, 1) : [];
     const memoSummary = memoRows[0] || '';
-    if (st.shape === 'circle') {
+    if (compactView) {
+      body = `<rect width="${W}" height="${H}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
+        <text x="10" y="${H / 2 + 4.5}" font-size="12" font-weight="600" fill="#222"><title>${esc(n.title || '')}</title>${esc(titleLines(n.title, 20, 1)[0] || '')}</text>`;
+    } else if (st.shape === 'circle') {
       body = `<circle cx="${W / 2}" cy="${H / 2}" r="${W / 2 - 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
         <text x="${W / 2}" y="${H / 2 - (titleRows.length > 1 ? 15 : 7)}" font-size="13" font-weight="700" fill="#222" text-anchor="middle">${titleRows.map((line, i) => `<tspan x="${W / 2}" dy="${i ? 15 : 0}">${esc(line)}</tspan>`).join('')}</text>
         ${memoSummary ? `<text x="${W / 2}" y="${H / 2 + 15}" font-size="10" fill="#555" text-anchor="middle"><title>${esc(n.memo)}</title>${esc(memoSummary)}</text>` : ''}
@@ -1254,6 +1260,7 @@ $('#s_canvasPadding').addEventListener('input', e => {
 });
 $('#btnSettingsDefault').onclick = () => { S.settings = {...DEFAULT_SETTINGS}; save(); render(); renderSettings(); };
 $('#statusFilter').addEventListener('change', e => { statusFilter = e.target.value; render(); });
+$('#compactView').addEventListener('change', e => { compactView = e.target.checked; render(); fitView(); });
 let activeLayoutMode = 'pyramid';
 function setLayoutOptionsOpen(open) {
   const button = $('#layoutMode'), options = $('#layoutOptions');
