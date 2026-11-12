@@ -19,6 +19,7 @@
   #btnReset{color:#6b7280}
   .history-buttons{gap:3px;padding-right:0;border-right:0}
   .history-buttons button{box-sizing:border-box;width:28px;height:30px;padding:3px;display:grid;place-items:center;font-size:18px;line-height:1}
+  #statusFilter{max-width:150px;padding:6px 8px;border:1px solid #cbd2dc;border-radius:7px;background:white;font:inherit;font-size:13px;color:#263244}
   #layoutMode{max-width:170px;padding:6px 8px;border:1px solid #cbd2dc;border-radius:7px;background:white;font:inherit;font-size:13px;color:#263244}
   #layoutOptions{position:fixed;z-index:40;min-width:170px;max-height:min(320px,70vh);overflow:auto;padding:4px;border:1px solid #d4d9e1;border-radius:8px;background:#fff;box-shadow:0 8px 24px #18223026}
   #layoutOptions[hidden]{display:none}
@@ -86,6 +87,7 @@
     <div class="layout-picker"><button id="layoutMode" type="button" title="정렬 방식을 선택하면 바로 적용됩니다" aria-haspopup="listbox" aria-expanded="false">피라미드 ▾</button><div id="layoutOptions" role="listbox" aria-label="정렬 방식" hidden>
       <button type="button" role="option" data-layout="pyramid" aria-selected="true">피라미드</button><button type="button" role="option" data-layout="inversePyramid" aria-selected="false">역피라미드</button><button type="button" role="option" data-layout="diamond" aria-selected="false">다이아몬드</button><button type="button" role="option" data-layout="circle" aria-selected="false">원형</button><button type="button" role="option" data-layout="grid" aria-selected="false">격자</button>
     </div></div></div>
+  <div class="toolbar-group"><label title="선택한 상태가 아닌 노드와 화살표는 흐리게 표시됩니다">상태 보기 <select id="statusFilter"><option value="all">전체</option><option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option></select></label></div>
   <div class="toolbar-group"><div class="search-wrap"><input id="nodeSearch" type="search" placeholder="노드 제목·메모 검색" aria-label="노드 제목과 메모 검색" autocomplete="off"><div id="searchResults" role="listbox" aria-label="검색 결과" hidden></div></div></div>
   <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
   <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReload" title="노드 파일 폴더를 다시 읽습니다. 다른 기기에서 동기화된 내용을 반영합니다">파일 다시 읽기</button><button id="btnReset">초기화</button></div>
@@ -136,6 +138,7 @@
     <li>노드 역할은 화살표 연결에 따라 자동 결정됩니다. 나가는 화살표만 있으면 시작, 들어오는 화살표만 있으면 목표, 둘 다 있거나 화살표가 없으면 일반입니다</li>
     <li>노드를 선택해 진행 상태(미착수·진행 중·완료·중단·실패)와 메모를 편집합니다. 상태와 자동 역할에 따라 표시가 달라집니다</li>
     <li>포커스 모드: 버튼을 누른 뒤 시작 노드를 선택하면 화살표 방향으로 이어지는 경로를 표시합니다. 선택 노드로 들어오는 화살표는 경로에 포함하지 않으며, 포커스 중 다른 노드를 선택해도 경로는 고정됩니다. 새로 만든 노드와 그 연결 화살표는 포커스 종료 전까지 계속 표시되어 편집·삭제할 수 있습니다</li>
+    <li>상태 보기: 툴바에서 상태를 고르면 그 상태의 노드는 진하게, 나머지 노드와 화살표는 흐리게 표시합니다. 파일에는 저장되지 않는 화면 설정입니다</li>
     <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양, 선택 강조 색을 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
   </ul>
   <button id="btnHelpClose">닫기</button>
@@ -236,6 +239,9 @@ const svg = $('#canvas');
 
 let S, sel = {type: null, id: null}, drag = null, pan = null, pendingConnectionSource = null;
 let focusMode = false, focusNodeId = null;
+// 상태 보기: 선택한 상태가 아닌 노드와 그 화살표를 흐리게 표시합니다. 화면 보기 설정이라 파일에 저장하지 않습니다.
+let statusFilter = 'all';
+const isDimmedByStatus = n => statusFilter !== 'all' && n.status !== statusFilter;
 let focusCreatedNodeIds = new Set(), focusCreatedEdgeIds = new Set();
 let graphSaveTimer = null;
 let lastEditAt = 0;   // 마지막 편집 시각: 편집 직후에는 파일을 다시 읽지 않습니다
@@ -600,6 +606,8 @@ function render() {
   for (const e of S.edges) {
     if (!visibleEdgeIds.has(e.id)) continue;
     const a = node(e.from), b = node(e.to);
+    const edgeDim = isDimmedByStatus(a) || isDimmedByStatus(b);
+    h += `<g opacity="${edgeDim ? 0.2 : 1}">`;
     const forward = a.x + W / 2 <= b.x + W / 2;
     const x1 = forward ? a.x + W : a.x, x2 = forward ? b.x : b.x + W;
     const offsets = focusOffsets.get(e.id) || {start: 0, end: 0};
@@ -623,7 +631,7 @@ function render() {
     const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 8;
     const edgeMemoSummary = e.memo ? titleLines(e.memo, 14, 1)[0] : '';
     if (edgeMemoSummary) h += `<text x="${mx}" y="${my}" font-size="11" fill="#222" text-anchor="middle" paint-order="stroke" stroke="${st.bgColor}" stroke-width="4" pointer-events="none"><title>${esc(e.memo)}</title>${esc(edgeMemoSummary)}</text>`;
-    h += `<path d="${d}" fill="none" stroke="transparent" stroke-width="14" data-edge="${e.id}" style="cursor:pointer"/>`;
+    h += `<path d="${d}" fill="none" stroke="transparent" stroke-width="14" data-edge="${e.id}" style="cursor:pointer"/></g>`;
   }
 
   for (const n of S.nodes) {
@@ -650,7 +658,7 @@ function render() {
         <rect x="10" y="72" width="${status.label.length * 13 + 14}" height="22" rx="11" fill="${status.color}" fill-opacity=".14"/>
         <text x="17" y="87" font-size="11" font-weight="700" fill="${status.color}">${status.label}</text>`;
     }
-    h += `<g data-node="${n.id}" transform="translate(${n.x},${n.y})" style="cursor:move">${body}</g>`;
+    h += `<g data-node="${n.id}" transform="translate(${n.x},${n.y})" style="cursor:move" opacity="${isDimmedByStatus(n) ? 0.25 : 1}">${body}</g>`;
   }
   // 캔버스 크기: 노드가 모두 들어갈 만큼 키우고, 확대/축소 비율을 적용
   const padding = Math.max(0, Math.min(1000, Number(st.canvasPadding) || 0));
@@ -1180,6 +1188,7 @@ $('#s_canvasPadding').addEventListener('input', e => {
   save(); render();
 });
 $('#btnSettingsDefault').onclick = () => { S.settings = {...DEFAULT_SETTINGS}; save(); render(); renderSettings(); };
+$('#statusFilter').addEventListener('change', e => { statusFilter = e.target.value; render(); });
 let activeLayoutMode = 'pyramid';
 function setLayoutOptionsOpen(open) {
   const button = $('#layoutMode'), options = $('#layoutOptions');
