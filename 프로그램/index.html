@@ -77,7 +77,8 @@
   .hint{font-size:13px;color:#555;line-height:1.8}
   .muted{font-size:12px;color:#888;margin-bottom:4px}
   @media (max-width:1000px){header{gap:7px}.toolbar-group{padding-right:8px}.toolbar-group button{padding:6px 8px}#btnUndo,#btnRedo{padding:3px}}
-  @media (max-width:800px){main{flex-direction:column}aside{width:auto;flex:0 0 auto;border-left:0;border-top:1px solid #ddd;max-height:35vh}#memoLabel{flex-basis:240px;min-height:160px}#f_memo{min-height:140px}}
+  .panel-toggle{display:none;align-items:center;gap:6px;margin-bottom:8px;font-size:13px;color:#263244}
+  @media (max-width:800px){.panel-toggle{display:flex}aside.minimized{max-height:44px;overflow:hidden;padding-top:10px;padding-bottom:10px}main{flex-direction:column}aside{width:auto;flex:0 0 auto;border-left:0;border-top:1px solid #ddd;max-height:35vh}#memoLabel{flex-basis:240px;min-height:160px}#f_memo{min-height:140px}}
 </style>
 </head>
 <body>
@@ -95,6 +96,7 @@
 <main>
   <div id="stage"><div id="tip"></div><svg id="canvas" width="2400" height="1600"></svg></div>
   <aside>
+    <label class="panel-toggle"><input type="checkbox" id="panelExpand" checked> 패널 펼치기</label>
     <div id="help" class="hint">
       인과 그래프 하나를 편집합니다. 노드 Markdown 파일(노드파일 폴더)이 원본이며, 그래프 JSON은 내부데이터 폴더에 보조로 저장됩니다.<br><br>
       노드나 화살표를 클릭하면 여기에서 내용을 편집할 수 있습니다.<br>
@@ -1261,6 +1263,8 @@ $('#s_canvasPadding').addEventListener('input', e => {
 $('#btnSettingsDefault').onclick = () => { S.settings = {...DEFAULT_SETTINGS}; save(); render(); renderSettings(); };
 $('#statusFilter').addEventListener('change', e => { statusFilter = e.target.value; render(); });
 $('#compactView').addEventListener('change', e => { compactView = e.target.checked; render(); fitView(); });
+// 하단 패널(폰 화면): 체크를 해제하면 제목 줄만 남기고 최소화, 다시 체크하면 원래 크기로 돌아갑니다.
+$('#panelExpand').addEventListener('change', e => $('aside').classList.toggle('minimized', !e.target.checked));
 let activeLayoutMode = 'pyramid';
 function setLayoutOptionsOpen(open) {
   const button = $('#layoutMode'), options = $('#layoutOptions');
