@@ -6,86 +6,108 @@
 <title>인과 편집기</title>
 <script src="md-graph.js"></script>
 <style>
-  body{margin:0;font-family:system-ui,"Malgun Gothic",sans-serif;background:#f4f5f7;color:#222;height:100vh;display:flex;flex-direction:column}
-  header{position:relative;z-index:2;display:flex;flex-wrap:nowrap;gap:8px 10px;align-items:center;padding:9px 14px;background:#fff;border-bottom:1px solid #dce1e8;box-shadow:0 1px 3px #1822300a;overflow-x:auto;scrollbar-width:thin}
-  header h1{font-size:17px;letter-spacing:-.3px;margin:0 4px 0 0;white-space:nowrap}
-  .toolbar-group{display:flex;flex:0 0 auto;gap:6px;align-items:center;padding-right:10px;border-right:1px solid #e5e7eb}
-  .toolbar-group:last-of-type{border-right:0;padding-right:0}
-  button,.btn{padding:6px 10px;border:1px solid #cbd2dc;border-radius:7px;background:#fff;color:#263244;cursor:pointer;font:inherit;font-size:13px;line-height:1.35;white-space:nowrap;transition:background .12s,border-color .12s}
-  button:hover,.btn:hover{background:#f4f7fb;border-color:#aab5c4}
-  button:focus-visible,.btn:focus-visible,select:focus-visible{outline:2px solid #93c5fd;outline-offset:1px}
-  #btnVersions{border-color:#bfd3f7;background:#f5f8ff;color:#1d4ed8}
-  #btnFocus[aria-pressed="true"]{border-color:#2563eb;background:#eff6ff;color:#1d4ed8}
-  #btnReset{color:#6b7280}
-  .history-buttons{gap:3px;padding-right:0;border-right:0}
-  .history-buttons button{box-sizing:border-box;width:28px;height:30px;padding:3px;display:grid;place-items:center;font-size:18px;line-height:1}
-  #statusFilter{max-width:150px;padding:6px 8px;border:1px solid #cbd2dc;border-radius:7px;background:white;font:inherit;font-size:13px;color:#263244}
-  #layoutMode{max-width:170px;padding:6px 8px;border:1px solid #cbd2dc;border-radius:7px;background:white;font:inherit;font-size:13px;color:#263244}
-  #layoutOptions{position:fixed;z-index:40;min-width:170px;max-height:min(320px,70vh);overflow:auto;padding:4px;border:1px solid #d4d9e1;border-radius:8px;background:#fff;box-shadow:0 8px 24px #18223026}
+  /* 디자인 토큰: 무채색 바탕에 잉크색 한 가지, 포커스 표시에만 파란색을 씁니다 */
+  :root{
+    --bg:#fafafa;--surface:#fff;--line:#e8eaed;--line-strong:#d3d7dc;--hover:#f3f4f6;
+    --text:#1a1d21;--muted:#6b7280;--faint:#9aa1ab;--ink:#1a1d21;--focus:#3b6ff5;--danger:#b42318;
+    --radius:6px;--shadow:0 6px 24px rgba(17,24,39,.10);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,"Pretendard","Malgun Gothic",sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+  header{position:relative;z-index:2;display:flex;flex-wrap:wrap;gap:6px 20px;align-items:center;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+  header h1{font-size:14px;font-weight:650;letter-spacing:-.2px;margin:0 2px 0 0;white-space:nowrap}
+  .toolbar-group{display:flex;flex:0 0 auto;gap:4px;align-items:center}
+  .toolbar-group label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;white-space:nowrap}
+  button,.btn{padding:5px 10px;border:1px solid transparent;border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer;font:inherit;font-size:13px;line-height:1.4;white-space:nowrap;transition:background .12s,border-color .12s,color .12s}
+  button:hover,.btn:hover{background:var(--hover)}
+  button:focus-visible,.btn:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+  #btnAdd{background:var(--ink);color:#fff}
+  #btnAdd:hover{background:#363b43}
+  #btnFocus[aria-pressed="true"]{background:var(--hover);border-color:var(--line-strong);font-weight:600}
+  #btnReset{color:var(--faint)}
+  #btnReset:hover{color:var(--danger)}
+  .history-buttons{gap:2px}
+  .history-buttons button{width:28px;height:28px;padding:0;display:grid;place-items:center;font-size:17px;line-height:1;color:var(--muted)}
+  #statusFilter,#layoutMode,#nodeSearch{padding:5px 8px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface);font:inherit;font-size:13px;color:var(--text)}
+  #statusFilter{max-width:130px}
+  #layoutMode{max-width:170px;color:var(--text)}
+  #layoutMode:hover{background:var(--hover)}
+  #layoutOptions,#searchResults,#canvasMenu{border:1px solid var(--line);border-radius:8px;background:var(--surface);box-shadow:var(--shadow)}
+  #layoutOptions{position:fixed;z-index:40;min-width:170px;max-height:min(320px,70vh);overflow:auto;padding:4px}
   #layoutOptions[hidden]{display:none}
-  #layoutOptions button{display:block;width:100%;padding:7px 9px;border:0;border-radius:5px;text-align:left}
-  #layoutOptions button:hover,#layoutOptions button[aria-selected="true"]{background:#eff6ff}
-  #fstat{display:block;flex:0 0 auto;min-width:0;max-width:100%;margin-top:auto;padding-top:8px;border-top:1px solid #e5e7eb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+  #layoutOptions button{display:block;width:100%;padding:6px 10px;border:0;border-radius:4px;text-align:left}
+  #layoutOptions button[aria-selected="true"]{background:var(--hover);font-weight:600}
+  #fstat{display:block;flex:0 0 auto;min-width:0;max-width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--line);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--faint)}
   #fstat:empty{display:none}
   .search-wrap{position:relative;display:flex;align-items:center;gap:4px}
-  #nodeSearch{width:150px;padding:6px 8px;border:1px solid #cbd2dc;border-radius:7px;font:inherit;font-size:13px}
-  #searchResults{position:absolute;z-index:20;top:calc(100% + 6px);left:0;width:min(340px,80vw);max-height:340px;overflow:auto;background:#fff;border:1px solid #d4d9e1;border-radius:8px;box-shadow:0 8px 24px #18223026}
+  #nodeSearch{width:160px}
+  #nodeSearch::placeholder{color:var(--faint)}
+  #searchResults{position:absolute;z-index:20;top:calc(100% + 6px);left:0;width:min(340px,80vw);max-height:340px;overflow:auto}
   #searchResults[hidden]{display:none}
-  #searchResults button{display:block;width:100%;padding:8px 10px;border:0;border-radius:0;text-align:left;white-space:normal}
-  #searchResults button+button{border-top:1px solid #eee}
-  .search-detail{display:block;color:#667085;font-size:11px;margin-top:2px}
-  button:disabled{opacity:.4;cursor:not-allowed}
+  #searchResults button{display:block;width:100%;padding:8px 12px;border:0;border-radius:0;text-align:left;white-space:normal}
+  #searchResults button+button{border-top:1px solid var(--line)}
+  .search-detail{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  button:disabled:hover{background:transparent}
   .btn input{display:none}
   main{flex:1;display:flex;min-height:0}
-  #stage{flex:1;overflow:auto;position:relative;background:#fafafa;scrollbar-color:#aab2bd #edf0f4;cursor:grab}
+  #stage{flex:1;overflow:auto;position:relative;background:var(--bg);scrollbar-color:#c4c9d0 transparent;scrollbar-width:thin;cursor:grab}
   #canvas{display:block;margin-inline:auto}
   #stage.is-panning{cursor:grabbing;user-select:none}
   .inline-editor{position:absolute;z-index:5;box-sizing:border-box;overflow:hidden;cursor:text}
-  .inline-editor textarea{position:absolute;box-sizing:border-box;margin:0;padding:2px 4px;border:1px solid transparent;border-radius:4px;background:transparent;color:#222;font-family:inherit;line-height:1.3;resize:none;overflow:hidden;outline:none}
-  .inline-editor textarea:focus{background:#fff;border-color:#2563eb}
-  #canvasMenu{position:fixed;z-index:30;min-width:190px;padding:5px;border:1px solid #d4d9e1;border-radius:9px;background:#fff;box-shadow:0 8px 24px #18223026}
+  .inline-editor textarea{position:absolute;box-sizing:border-box;margin:0;padding:2px 4px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--text);font-family:inherit;line-height:1.3;resize:none;overflow:hidden;outline:none}
+  .inline-editor textarea:focus{background:#fff;border-color:var(--focus);outline:none}
+  #canvasMenu{position:fixed;z-index:30;min-width:190px;padding:4px}
   #canvasMenu[hidden]{display:none}
-  #canvasMenu button{display:block;width:100%;padding:8px 10px;border:0;text-align:left;background:transparent}
-  #canvasMenu button:hover{background:#f1f5f9}
-  #canvasMenu button.danger{color:#b42318}
+  #canvasMenu button{display:block;width:100%;padding:7px 10px;border:0;border-radius:4px;text-align:left}
+  #canvasMenu button.danger{color:var(--danger)}
   #tip[hidden]{display:none}
-  #tip{position:sticky;top:0;z-index:1;background:#fffbe6;border-bottom:1px solid #f0e0a0;padding:6px 12px;font-size:13px;color:#554}
-  aside{width:300px;flex:0 0 300px;border-left:1px solid #e1e5eb;background:#fff;padding:18px 16px;overflow:auto;box-sizing:border-box;display:flex;flex-direction:column}
+  #tip{position:sticky;top:0;z-index:1;background:var(--surface);border-bottom:1px solid var(--line);padding:7px 16px;font-size:12px;color:var(--muted)}
+  aside{width:300px;flex:0 0 300px;border-left:1px solid var(--line);background:var(--surface);padding:20px 18px;overflow:auto;box-sizing:border-box;display:flex;flex-direction:column}
   aside[hidden]{display:none}
-  #sidebarResizer{flex:0 0 6px;cursor:col-resize;touch-action:none;background:#f3f5f8;border-left:1px solid #e1e5eb;user-select:none}
-  #sidebarResizer:hover,#sidebarResizer.dragging{background:#c9d3e0}
+  #sidebarResizer{flex:0 0 5px;margin-left:-3px;z-index:1;cursor:col-resize;touch-action:none;background:transparent;user-select:none;transition:background .12s}
+  #sidebarResizer:hover,#sidebarResizer.dragging{background:var(--line-strong)}
   #sidebarResizer[hidden]{display:none}
   @media (max-width:800px){#sidebarResizer{display:none}}
-  #help{color:#667085;font-size:13px;line-height:1.75}
-  aside label{display:block;font-size:12px;color:#555;margin-top:10px}
-  aside input,aside textarea,aside select{width:100%;box-sizing:border-box;padding:6px;border:1px solid #ccc;border-radius:6px;font:inherit;margin-top:3px}
-  aside textarea{min-height:52px;resize:vertical}
+  #help{color:var(--muted);font-size:13px;line-height:1.75}
+  aside label{display:block;font-size:11px;font-weight:600;letter-spacing:.2px;color:var(--muted);margin-top:14px}
+  aside label:first-child{margin-top:0}
+  aside input,aside textarea,aside select{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface);color:var(--text);font:inherit;font-size:13px;font-weight:400;letter-spacing:0;margin-top:5px}
+  aside input:focus,aside textarea:focus,aside select:focus{border-color:var(--focus);outline:none}
+  aside input[readonly]{background:var(--bg);color:var(--muted)}
+  aside textarea{min-height:52px;resize:vertical;line-height:1.5}
   #nodeForm:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column}
   #memoLabel{flex:0 1 420px;min-height:200px;display:flex;flex-direction:column}
   #f_memo{flex:1;min-height:180px}
-  aside button{margin-top:12px}
-  dialog{border:1px solid #ccc;border-radius:10px;padding:18px 20px;max-width:520px;width:90vw;color:#222}
-  dialog::backdrop{background:rgba(0,0,0,.3)}
-  dialog button{margin-top:14px}
-  dialog label{display:block;font-size:13px;margin-top:10px}
-  dialog select{font:inherit;padding:4px;margin-left:6px}
-  .cset{margin-top:12px}
+  aside button{margin-top:10px;border-color:var(--line-strong);text-align:center}
+  #btnDelNode,#btnDelEdge{color:var(--danger);border-color:transparent}
+  #btnDelNode:hover,#btnDelEdge:hover{background:#fef3f2}
+  dialog{border:0;border-radius:12px;padding:24px;max-width:520px;width:90vw;color:var(--text);box-shadow:0 20px 60px rgba(17,24,39,.22)}
+  dialog::backdrop{background:rgba(17,24,39,.35)}
+  dialog h2,dialog h3{font-weight:650;letter-spacing:-.2px}
+  dialog button,dialog .btn{margin-top:14px;border-color:var(--line-strong)}
+  dialog label{display:block;font-size:13px;margin-top:12px}
+  dialog select,dialog input[type=number],dialog input:not([type]),dialog input[type=text]{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface);color:var(--text)}
+  dialog select{margin-left:6px}
+  dialog input[type=checkbox]{accent-color:var(--ink)}
+  dialog .btn{display:inline-block}
+  .cset{margin-top:14px}
   .cl{display:block;font-size:13px}
-  .crow{display:flex;gap:6px;align-items:center;margin-top:4px}
-  .crow input{width:110px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:13px}
-  #s_canvasPadding{width:100px;padding:5px 6px;border:1px solid #ccc;border-radius:6px;font:inherit}
-  .sw{display:inline-block;width:26px;height:26px;border-radius:4px;border:1px solid #999}
-  .presets{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+  .crow{display:flex;gap:8px;align-items:center;margin-top:5px}
+  .crow input{width:110px}
+  #s_canvasPadding{width:100px}
+  .sw{display:inline-block;width:26px;height:26px;border-radius:var(--radius);border:1px solid var(--line-strong)}
+  .presets{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
   .interval-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
-  .interval-row label{display:block;font-size:12px;color:#555}
-  .interval-row input{box-sizing:border-box;width:72px;padding:6px;border:1px solid #ccc;border-radius:6px;font:inherit}
-  .pc{width:22px;height:22px;padding:0;margin:0;border:1px solid #999;border-radius:4px;cursor:pointer}
-  dialog .btn{display:inline-block;margin-top:14px}
-  .hint{font-size:13px;color:#555;line-height:1.8}
-  .muted{font-size:12px;color:#888;margin-bottom:4px}
-  @media (max-width:1000px){header{gap:7px}.toolbar-group{padding-right:8px}.toolbar-group button{padding:6px 8px}#btnUndo,#btnRedo{padding:3px}}
-  .panel-toggle{display:none;align-items:center;gap:6px;margin-bottom:8px;font-size:13px;color:#263244}
-  @media (max-width:800px){.panel-toggle{display:flex}aside.minimized{max-height:44px;overflow:hidden;padding-top:10px;padding-bottom:10px}main{flex-direction:column}aside{width:auto;flex:0 0 auto;border-left:0;border-top:1px solid #ddd;max-height:35vh}#memoLabel{flex-basis:240px;min-height:160px}#f_memo{min-height:140px}}
+  .interval-row label{display:block;font-size:12px;color:var(--muted)}
+  .interval-row input{width:72px}
+  .pc{width:22px;height:22px;padding:0;margin:0;border:1px solid var(--line-strong);border-radius:50%;cursor:pointer}
+  .hint{font-size:13px;color:var(--muted);line-height:1.8}
+  .muted{font-size:12px;color:var(--faint);margin-bottom:4px;line-height:1.6}
+  @media (max-width:800px){header{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}}
+  @media (max-width:1000px){header{gap:6px 14px}.toolbar-group button{padding:5px 8px}.history-buttons button{padding:0}}
+  .panel-toggle{display:none;align-items:center;gap:6px;margin-bottom:8px;font-size:13px;color:var(--text)}
+  @media (max-width:800px){.panel-toggle{display:flex}aside.minimized{max-height:44px;overflow:hidden;padding-top:10px;padding-bottom:10px}main{flex-direction:column}aside{width:auto;flex:0 0 auto;border-left:0;border-top:1px solid var(--line);max-height:35vh}#memoLabel{flex-basis:240px;min-height:160px}#f_memo{min-height:140px}}
 </style>
 </head>
 <body>
@@ -649,7 +671,7 @@ function render() {
     h += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${w}" marker-end="url(#arr-${color.slice(1)})"/>`;
     const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 8;
     const edgeMemoSummary = e.memo ? titleLines(e.memo, 14, 1)[0] : '';
-    if (edgeMemoSummary && !compactView) h += `<text x="${mx}" y="${my}" font-size="11" fill="#222" text-anchor="middle" paint-order="stroke" stroke="${st.bgColor}" stroke-width="4" pointer-events="none"><title>${esc(e.memo)}</title>${esc(edgeMemoSummary)}</text>`;
+    if (edgeMemoSummary && !compactView) h += `<text x="${mx}" y="${my}" font-size="11" fill="#4b5563" text-anchor="middle" paint-order="stroke" stroke="${st.bgColor}" stroke-width="4" pointer-events="none"><title>${esc(e.memo)}</title>${esc(edgeMemoSummary)}</text>`;
     h += `<path d="${d}" fill="none" stroke="transparent" stroke-width="14" data-edge="${e.id}" style="cursor:pointer"/></g>`;
   }
 
@@ -657,28 +679,28 @@ function render() {
     if (!visibleNodeIds.has(n.id)) continue;
     const isSel = sel.type === 'node' && sel.id === n.id;
     const kind = nodeKind(n);
-    const fill = kind === 'start' ? '#ecfdf5' : kind === 'goal' ? '#fef2f2' : st.nodeColor;
+    const fill = kind === 'start' ? '#f0faf4' : kind === 'goal' ? '#fdf3f3' : st.nodeColor;
     const status = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
-    const stroke = isSel ? '#000000' : status.color;
-    const sw = isSel ? 4 : 3;
+    const stroke = isSel ? '#1a1d21' : status.color;
+    const sw = isSel ? 2.5 : 1.5;
     let body;
     const titleRows = titleLines(n.title, st.shape === 'circle' ? 8 : 12);
     const memoRows = n.memo ? titleLines(n.memo, st.shape === 'circle' ? 8 : 16, 1) : [];
     const memoSummary = memoRows[0] || '';
     if (compactView) {
       body = `<rect width="${W}" height="${H}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
-        <text x="10" y="${H / 2 + 4.5}" font-size="12" font-weight="600" fill="#222"><title>${esc(n.title || '')}</title>${esc(titleLines(n.title, 20, 1)[0] || '')}</text>`;
+        <text x="10" y="${H / 2 + 4.5}" font-size="12" font-weight="600" fill="#1a1d21"><title>${esc(n.title || '')}</title>${esc(titleLines(n.title, 20, 1)[0] || '')}</text>`;
     } else if (st.shape === 'circle') {
       body = `<circle cx="${W / 2}" cy="${H / 2}" r="${W / 2 - 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
-        <text x="${W / 2}" y="${H / 2 - (titleRows.length > 1 ? 15 : 7)}" font-size="13" font-weight="700" fill="#222" text-anchor="middle">${titleRows.map((line, i) => `<tspan x="${W / 2}" dy="${i ? 15 : 0}">${esc(line)}</tspan>`).join('')}</text>
-        ${memoSummary ? `<text x="${W / 2}" y="${H / 2 + 15}" font-size="10" fill="#555" text-anchor="middle"><title>${esc(n.memo)}</title>${esc(memoSummary)}</text>` : ''}
-        <text x="${W / 2}" y="${H / 2 + 34}" font-size="10" font-weight="700" fill="${status.color}" text-anchor="middle">${status.label}</text>`;
+        <text x="${W / 2}" y="${H / 2 - (titleRows.length > 1 ? 15 : 7)}" font-size="13" font-weight="600" fill="#1a1d21" text-anchor="middle">${titleRows.map((line, i) => `<tspan x="${W / 2}" dy="${i ? 15 : 0}">${esc(line)}</tspan>`).join('')}</text>
+        ${memoSummary ? `<text x="${W / 2}" y="${H / 2 + 15}" font-size="10" fill="#6b7280" text-anchor="middle"><title>${esc(n.memo)}</title>${esc(memoSummary)}</text>` : ''}
+        <text x="${W / 2}" y="${H / 2 + 34}" font-size="10" font-weight="600" fill="${status.color}" text-anchor="middle">${status.label}</text>`;
     } else {
       body = `<rect width="${W}" height="${H}" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
-        <text x="10" y="22" font-size="14" font-weight="700" fill="#222">${titleRows.map((line, i) => `<tspan x="10" dy="${i ? 17 : 0}">${esc(line)}</tspan>`).join('')}</text>
-        ${memoSummary ? `<text x="10" y="58" font-size="11" fill="#555"><title>${esc(n.memo)}</title>${esc(memoSummary)}</text>` : ''}
-        <rect x="10" y="72" width="${status.label.length * 13 + 14}" height="22" rx="11" fill="${status.color}" fill-opacity=".14"/>
-        <text x="17" y="87" font-size="11" font-weight="700" fill="${status.color}">${status.label}</text>`;
+        <text x="12" y="24" font-size="14" font-weight="600" fill="#1a1d21">${titleRows.map((line, i) => `<tspan x="12" dy="${i ? 17 : 0}">${esc(line)}</tspan>`).join('')}</text>
+        ${memoSummary ? `<text x="12" y="58" font-size="11" fill="#6b7280"><title>${esc(n.memo)}</title>${esc(memoSummary)}</text>` : ''}
+        <circle cx="16" cy="88" r="3.5" fill="${status.color}"/>
+        <text x="26" y="92" font-size="11" fill="#6b7280">${status.label}</text>`;
     }
     h += `<g data-node="${n.id}" transform="translate(${n.x},${n.y})" style="cursor:move" opacity="${isDimmedByStatus(n) ? 0.25 : 1}">${body}</g>`;
   }
