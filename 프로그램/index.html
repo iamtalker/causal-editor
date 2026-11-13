@@ -40,7 +40,7 @@
   #stage{flex:1;overflow:auto;position:relative;background:#fafafa;scrollbar-color:#aab2bd #edf0f4;cursor:grab}
   #canvas{display:block;margin-inline:auto}
   #stage.is-panning{cursor:grabbing;user-select:none}
-  .inline-editor{position:absolute;z-index:5;box-sizing:border-box;border-radius:10px;overflow:hidden;cursor:text}
+  .inline-editor{position:absolute;z-index:5;box-sizing:border-box;overflow:hidden;cursor:text}
   .inline-editor textarea{position:absolute;box-sizing:border-box;margin:0;padding:2px 4px;border:1px solid transparent;border-radius:4px;background:transparent;color:#222;font-family:inherit;line-height:1.3;resize:none;overflow:hidden;outline:none}
   .inline-editor textarea:focus{background:#fff;border-color:#2563eb}
   #canvasMenu{position:fixed;z-index:30;min-width:190px;padding:5px;border:1px solid #d4d9e1;border-radius:9px;background:#fff;box-shadow:0 8px 24px #18223026}
@@ -1306,59 +1306,90 @@ function nodeIdAt(x, y) {
   }
   return null;
 }
-function openInlineEditor(id) {
+// 노드 자리 편집창의 칸 배치(노드 좌표 기준 px). 노드 모양에 따라 제목·메모 칸 위치가 달라집니다
+function inlineEditorLayout() {
+  if (compactView) return {radius: 8, title: {l: 6, t: 4, w: COMPACT.w - 12, h: 26, fs: 12, bold: 600, nowrap: true}, memo: null, memoTop: Infinity};
+  if (S.settings.shape === 'circle') {
+    return {radius: '50%', center: true,
+      title: {l: 24, t: 26, w: CIRCLE.w - 48, h: 34, fs: 13, bold: 700},
+      memo: {l: 24, t: 62, w: CIRCLE.w - 48, h: 40, fs: 11},
+      memoTop: 62};
+  }
+  return {radius: 10,
+    title: {l: 6, t: 6, w: RECT.w - 12, h: 40, fs: 14, bold: 700},
+    memo: {l: 6, t: 48, w: RECT.w - 12, h: RECT.h - 48 - 8, fs: 11},
+    memoTop: 46};
+}
+function closeInlineEditor(save = true) {
+  const box = inlineEditor; if (!box || box.dataset.done) return;
+  box.dataset.done = '1';
+  const id = box.dataset.nodeId;
+  if (save) applyInlineEdit(box, id);
+  box.remove();
+  if (inlineEditor === box) inlineEditor = null;
+}
+function openInlineEditor(id, focusMemo) {
   const n = node(id); if (!n) return;
-  if (inlineEditor) inlineEditor.remove();
-  const stage = $('#stage'), D = dims();
+  closeInlineEditor(true);
+  const stage = $('#stage'), D = dims(), L = inlineEditorLayout();
   const rect = svg.getBoundingClientRect(), sr = stage.getBoundingClientRect();
   const left = rect.left - sr.left + stage.scrollLeft + (n.x - viewMinX) * zoom;
   const top = rect.top - sr.top + stage.scrollTop + (n.y - viewMinY) * zoom;
-  // 노드 자리(제목·메모 영역)에 같은 배경으로 덮어서, 그 자리에서 바로 고칩니다
-  const z = zoom, W = D.w * z;
-  const fill = document.querySelector(`[data-node="${id}"] rect, [data-node="${id}"] circle`)?.getAttribute('fill') || '#ffffff';
+  // 노드와 같은 크기·모양·색으로 덮고, 노드 좌표 그대로 배치한 뒤 확대율만큼 키웁니다 (확대·축소해도 어긋나지 않음)
+  const shapeEl = document.querySelector(`[data-node="${id}"] rect, [data-node="${id}"] circle`);
+  const fill = shapeEl?.getAttribute('fill') || '#ffffff';
+  const stroke = shapeEl?.getAttribute('stroke') || '#000000';
+  const sw = shapeEl?.getAttribute('stroke-width') || '3';
   const box = document.createElement('div');
   box.className = 'inline-editor';
-  box.style.cssText = `left:${left}px;top:${top}px;width:${W}px;height:${Math.round(72 * z)}px;background:${fill}`;
-  box.innerHTML = `<textarea class="ie-title" style="left:${Math.round(8 * z)}px;top:${Math.round(4 * z)}px;width:${Math.round(W - 16 * z)}px;height:${Math.max(34, Math.round(38 * z))}px;font-size:${Math.max(11, 14 * z)}px;font-weight:700" placeholder="제목"></textarea>`
-    + (compactView ? '' : `<textarea class="ie-memo" style="left:${Math.round(8 * z)}px;top:${Math.round(44 * z)}px;width:${Math.round(W - 16 * z)}px;height:${Math.max(24, Math.round(26 * z))}px;font-size:${Math.max(10, 11 * z)}px" placeholder="메모"></textarea>`);
-  box.querySelector('.ie-title').value = n.title || '';
-  if (!compactView) box.querySelector('.ie-memo').value = n.memo || '';
+  box.dataset.nodeId = id;
+  box.style.cssText = `left:${left}px;top:${top}px;width:${D.w}px;height:${D.h}px;transform:scale(${zoom});transform-origin:0 0;`
+    + `background:${fill};border:${sw}px solid ${stroke};border-radius:${typeof L.radius === 'number' ? L.radius + 'px' : L.radius}`;
+  const ta = (cls, c, ph) => `<textarea class="${cls}" placeholder="${ph}" rows="1" ${c.nowrap ? 'wrap="off"' : ''} style="left:${c.l - sw}px;top:${c.t - sw}px;width:${c.w}px;height:${c.h}px;font-size:${c.fs}px;font-weight:${c.bold || 400}${L.center ? ';text-align:center' : ''}"></textarea>`;
+  box.innerHTML = ta('ie-title', L.title, '제목') + (L.memo ? ta('ie-memo', L.memo, '메모') : '');
+  const tEl = box.querySelector('.ie-title'), mEl = box.querySelector('.ie-memo');
+  tEl.value = n.title || '';
+  if (mEl) mEl.value = n.memo || '';
   stage.appendChild(box);
   inlineEditor = box;
   // 편집 칸 바깥을 누르면 저장하고 끝냅니다
   box.addEventListener('focusout', e => {
     if (box.contains(e.relatedTarget)) return;
-    if (box.dataset.done) return;
-    box.dataset.done = '1';
-    applyInlineEdit(box, id);
-    box.remove();
-    if (inlineEditor === box) inlineEditor = null;
+    closeInlineEditor(true);
   });
   // 덮은 배경을 눌러도 포커스가 빠지지 않게 합니다
   box.addEventListener('mousedown', e => { if (e.target === box) e.preventDefault(); });
-  box.querySelector('.ie-title').focus();
+  // 키: 제목에서 Enter = 저장, 메모에서 Ctrl+Enter = 저장(Enter는 줄바꿈), Esc = 취소, Tab/Shift+Tab = 제목↔메모
+  box.addEventListener('keydown', e => {
+    if (e.isComposing) return;   // 한글 조합 중에는 키를 건드리지 않습니다
+    if (e.key === 'Escape') { e.preventDefault(); closeInlineEditor(false); return; }
+    if (e.key === 'Enter' && !e.shiftKey && (e.target === tEl || e.ctrlKey || e.metaKey)) { e.preventDefault(); closeInlineEditor(true); return; }
+    if (e.key === 'Enter' && e.target === tEl) { e.preventDefault(); return; }
+    if (e.key === 'Tab' && mEl) { e.preventDefault(); (e.target === tEl ? mEl : tEl).focus(); }
+  });
+  // 제목은 한 줄 취급: 줄바꿈이 붙여 넣어져도 공백으로 바꿉니다
+  tEl.addEventListener('input', () => { if (tEl.value.includes('\n')) tEl.value = tEl.value.replace(/\s*\n\s*/g, ' '); });
+  const target = (focusMemo && mEl) || tEl;
+  target.focus();
+  target.setSelectionRange(target.value.length, target.value.length);
 }
 function applyInlineEdit(box, id) {
   const n = node(id); if (!n) return;
-  const t = box.querySelector('.ie-title').value;
-  const m = box.querySelector('.ie-memo').value;
+  const t = box.querySelector('.ie-title').value.trim();
+  const mEl = box.querySelector('.ie-memo');
   if (t !== (n.title || '')) { n.title = t; save(`node:${id}:title`); }
-  if (m !== (n.memo || '')) { n.memo = m; save(`node:${id}:memo`); }
+  if (mEl && mEl.value !== (n.memo || '')) { n.memo = mEl.value; save(`node:${id}:memo`); }
   render(); renderPanel();
 }
-// 노드를 두 번 누르면 편집창을 엽니다. 첫 클릭으로 화면이 다시 그려져 dblclick 이벤트가 나오지 않으므로 직접 판정합니다
-let lastNodeDown = {id: null, t: 0, x: 0, y: 0};
+// 노드를 두 번 누르면 편집창을 엽니다. 첫 클릭으로 화면이 다시 그려져 dblclick 이벤트가 나오지 않으므로 mousedown의 클릭 횟수(detail)로 판정합니다
 svg.addEventListener('mousedown', e => {
-  if (e.button !== 0) return;
+  if (e.button !== 0 || e.detail !== 2 || e.shiftKey || pendingConnectionSource) return;
   const id = nodeIdAt(e.clientX, e.clientY);
-  const now = Date.now();
-  if (id && lastNodeDown.id === id && now - lastNodeDown.t < 450 && Math.hypot(e.clientX - lastNodeDown.x, e.clientY - lastNodeDown.y) < 8) {
-    lastNodeDown = {id: null, t: 0, x: 0, y: 0};
-    // 마우스 기본 동작이 끝난 뒤에 열어야 포커스가 빠지지 않습니다
-    setTimeout(() => openInlineEditor(id), 0);
-    return;
-  }
-  lastNodeDown = id ? {id, t: now, x: e.clientX, y: e.clientY} : {id: null, t: 0, x: 0, y: 0};
+  if (!id) return;
+  const nd = node(id), py = svgPoint(e).y - (nd ? nd.y : 0);
+  const focusMemo = py >= inlineEditorLayout().memoTop;   // 메모 자리를 눌렀으면 메모 칸으로
+  // 마우스 기본 동작이 끝난 뒤에 열어야 포커스가 빠지지 않습니다
+  setTimeout(() => openInlineEditor(id, focusMemo), 0);
 });
 
 // 드래그 중인 노드가 화면 가장자리에 닿으면 스크롤해서 계속 보이게 합니다
@@ -1480,6 +1511,7 @@ $('#btnZoom100').onclick = () => { zoom = BASE_ZOOM; render(); };
 $('#stage').addEventListener('wheel', e => {
   if (!e.ctrlKey) return;
   e.preventDefault();
+  closeInlineEditor(true);   // 확대·축소 전에 편집 중인 내용을 저장하고 닫습니다
   const stage = $('#stage'), rect = stage.getBoundingClientRect();
   const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
   const worldX = (stage.scrollLeft + cx) / zoom + viewMinX, worldY = (stage.scrollTop + cy) / zoom + viewMinY;
