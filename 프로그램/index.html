@@ -27,6 +27,7 @@
   #btnReset{color:var(--faint)}
   #btnReset:hover{color:var(--danger)}
   .history-buttons{gap:2px}
+  .toolbar-end{display:flex;flex:0 0 auto;gap:20px;align-items:center;margin-left:auto}
   .history-buttons button{width:28px;height:28px;padding:0;display:grid;place-items:center;font-size:17px;line-height:1;color:var(--muted)}
   #statusFilter,#layoutMode,#nodeSearch{padding:5px 8px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface);font:inherit;font-size:13px;color:var(--text)}
   #statusFilter{max-width:130px}
@@ -56,6 +57,9 @@
   #stage.is-panning{cursor:grabbing;user-select:none}
   .inline-editor{position:absolute;z-index:5;box-sizing:border-box;overflow:hidden;cursor:text}
   .inline-editor textarea{position:absolute;box-sizing:border-box;margin:0;padding:2px 4px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--text);font-family:inherit;line-height:1.3;resize:none;overflow:hidden;outline:none}
+  .inline-editor textarea.ie-memo{overflow-y:auto}
+  .inline-editor select{position:absolute;box-sizing:border-box;margin:0;padding:0 2px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--muted);font-family:inherit;cursor:pointer}
+  .inline-editor select:hover,.inline-editor select:focus{background:#fff;border-color:var(--focus);outline:none;color:var(--text)}
   .inline-editor textarea:focus{background:#fff;border-color:var(--focus);outline:none}
   #canvasMenu{position:fixed;z-index:30;min-width:190px;padding:4px}
   #canvasMenu[hidden]{display:none}
@@ -96,12 +100,16 @@
   .crow{display:flex;gap:8px;align-items:center;margin-top:5px}
   .crow input{width:110px}
   #s_canvasPadding{width:100px}
-  .sw{display:inline-block;width:26px;height:26px;border-radius:var(--radius);border:1px solid var(--line-strong)}
+  .scl{display:inline-block;width:52px;font-size:13px}
+  .sw{cursor:pointer;display:inline-block;width:26px;height:26px;border-radius:var(--radius);border:1px solid var(--line-strong)}
   .presets{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
   .interval-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
   .interval-row label{display:block;font-size:12px;color:var(--muted)}
   .interval-row input{width:72px}
   .pc{width:22px;height:22px;padding:0;margin:0;border:1px solid var(--line-strong);border-radius:50%;cursor:pointer}
+  .dlg-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;padding-top:4px;border-top:1px solid var(--line)}
+  dialog h3.hh{font-size:12px;font-weight:650;color:var(--muted);margin:16px 0 4px}
+  dialog ul.hint{padding-left:18px;margin:0}
   .hint{font-size:13px;color:var(--muted);line-height:1.8}
   .muted{font-size:12px;color:var(--faint);margin-bottom:4px;line-height:1.6}
   @media (max-width:800px){header{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}}
@@ -112,15 +120,18 @@
 </head>
 <body>
 <header>
-  <div class="toolbar-group"><h1>인과 편집기</h1><button id="btnHelp">도움말</button></div>
-  <div class="toolbar-group"><button id="btnAdd">노드 추가</button><div class="toolbar-group history-buttons" aria-label="편집 기록"><button id="btnUndo" type="button" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기" disabled>↶</button><button id="btnRedo" type="button" title="다시 실행 (Ctrl+Y 또는 Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↷</button></div>
+  <h1>인과 편집기</h1>
+  <div class="toolbar-group" role="group" aria-label="편집"><button id="btnAdd">노드 추가</button><div class="toolbar-group history-buttons" aria-label="편집 기록"><button id="btnUndo" type="button" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기" disabled>↶</button><button id="btnRedo" type="button" title="다시 실행 (Ctrl+Y 또는 Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↷</button></div>
     <div class="layout-picker"><button id="layoutMode" type="button" title="정렬 방식을 선택하면 바로 적용됩니다" aria-haspopup="listbox" aria-expanded="false">피라미드 ▾</button><div id="layoutOptions" role="listbox" aria-label="정렬 방식" hidden>
-      <button type="button" role="option" data-layout="pyramid" aria-selected="true">피라미드</button><button type="button" role="option" data-layout="inversePyramid" aria-selected="false">역피라미드</button><button type="button" role="option" data-layout="diamond" aria-selected="false">다이아몬드</button><button type="button" role="option" data-layout="circle" aria-selected="false">원형</button><button type="button" role="option" data-layout="grid" aria-selected="false">격자</button><button type="button" role="option" data-layout="treeDown" aria-selected="false">트리 탑다운</button><button type="button" role="option" data-layout="treeUp" aria-selected="false">트리 바텀업</button>
+      <button type="button" role="option" data-layout="pyramid" aria-selected="true">피라미드</button><button type="button" role="option" data-layout="inversePyramid" aria-selected="false">역피라미드</button><button type="button" role="option" data-layout="diamond" aria-selected="false">다이아몬드</button><button type="button" role="option" data-layout="circle" aria-selected="false">원형</button><button type="button" role="option" data-layout="grid" aria-selected="false">격자</button><button type="button" role="option" data-layout="treeDown" aria-selected="false">트리 탑다운</button><button type="button" role="option" data-layout="treeUp" aria-selected="false">트리 바텀업</button><button type="button" role="option" data-layout="rank" aria-selected="false">연결 많은 순</button>
     </div></div></div>
-  <div class="toolbar-group"><label title="선택한 상태가 아닌 노드와 화살표는 흐리게 표시됩니다">상태 보기 <select id="statusFilter"><option value="all">전체</option><option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option></select></label><label title="노드를 제목 한 줄짜리 작은 상자로 보여 줍니다. 포커스 모드와 트리 정렬을 함께 쓰면 시작에서 목표까지 한 줄처럼 보입니다"><input type="checkbox" id="compactView"> 간편 보기</label></div>
-  <div class="toolbar-group"><div class="search-wrap"><input id="nodeSearch" type="search" placeholder="노드 제목·메모 검색" aria-label="노드 제목과 메모 검색" autocomplete="off"><div id="searchResults" role="listbox" aria-label="검색 결과" hidden></div></div></div>
-  <div class="toolbar-group"><button id="btnFocus" aria-pressed="false" title="선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다">포커스 모드</button><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
-  <div class="toolbar-group"><button id="btnVersions">버전 기록</button><button id="btnSettings">설정</button><button id="btnReload" title="노드 파일 폴더를 다시 읽습니다. 다른 기기에서 동기화된 내용을 반영합니다">파일 다시 읽기</button><button id="btnReset">초기화</button></div>
+  <div class="toolbar-group" role="group" aria-label="보기"><label title="노드를 제목 한 줄짜리 작은 상자로 보여 줍니다. 포커스 모드와 트리 정렬을 함께 쓰면 시작에서 종료까지 한 줄처럼 보입니다"><input type="checkbox" id="compactView"> 간편 보기</label><button id="btnFocus" aria-pressed="false" title="선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다">포커스 모드</button></div>
+  <div class="toolbar-group" role="group" aria-label="화면"><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
+  <div class="toolbar-group" role="search"><label title="고른 상태가 아닌 노드와 화살표는 흐리게 표시되고, 검색창 목록에도 그 상태의 노드만 나옵니다">상태 보기 <select id="statusFilter"><option value="all">전체</option><option value="start">시작</option><option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option><option value="end">종료</option></select></label><div class="search-wrap"><input id="nodeSearch" type="search" placeholder="노드 제목·메모 검색" aria-label="노드 제목과 메모 검색" autocomplete="off"><div id="searchResults" role="listbox" aria-label="검색 결과" hidden></div></div></div>
+  <div class="toolbar-end">
+  <div class="toolbar-group" role="group" aria-label="파일"><button id="btnVersions">버전 기록</button><button id="btnReload" title="노드 파일 폴더를 다시 읽습니다. 다른 기기에서 동기화된 내용을 반영합니다">파일 다시 읽기</button><button id="btnReset" title="모든 노드와 화살표를 지우고 빈 그래프로 시작합니다(설정은 유지)">모두 지우기</button></div>
+  <div class="toolbar-group" role="group" aria-label="앱"><button id="btnSettings">설정</button><button id="btnHelp">도움말</button></div>
+  </div>
 </header>
 <main>
   <div id="stage"><div id="tip"></div><svg id="canvas" width="2400" height="1600"></svg></div>
@@ -135,10 +146,9 @@
     <div id="nodeForm" hidden>
       <label>진행 상태
         <select id="f_status">
-          <option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option>
+          <option value="start">시작</option><option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option><option value="end">종료</option>
         </select>
       </label>
-      <label>역할<input id="f_kind" readonly aria-readonly="true"></label>
       <label>제목<input id="f_title"></label>
       <label id="memoLabel">메모<textarea id="f_memo"></textarea></label>
       <button id="btnOpenMd">노드 md 파일 열기</button>
@@ -157,21 +167,36 @@
 
 <dialog id="helpDlg">
   <h2 style="margin-top:0;font-size:17px">도움말</h2>
-  <ul class="hint" style="padding-left:18px;margin:0">
-    <li>빈 곳 더블클릭: 노드 추가 (노드 = 하나의 상태)</li>
-    <li>캔버스에서 마우스 오른쪽 버튼: 대상에 맞는 편집 메뉴</li>
-    <li>빈 캔버스를 누른 채 드래그: 화면 이동</li>
-    <li>상단 검색: 노드 제목과 메모를 검색하고, 결과를 누르면 해당 노드로 이동합니다</li>
-    <li>상단의 굽은 화살표 버튼 또는 Ctrl+Z / Ctrl+Y: 편집 되돌리기·다시 실행 (Ctrl+Shift+Z도 다시 실행)</li>
-    <li>노드 드래그: 위치 이동</li>
+  <h3 class="hh">편집</h3>
+  <ul class="hint">
+    <li>빈 곳 더블클릭: 노드 추가</li>
+    <li>노드 더블클릭: 그 자리에서 제목·메모·진행 상태 편집 (제목 Enter 또는 메모 Ctrl+Enter 저장, Esc 취소, Tab 칸 이동, 사이드바를 열지 않아도 됩니다)</li>
     <li>노드 선택 후 Shift+클릭 다른 노드: 화살표 연결 (원인 → 결과)</li>
-    <li>화살표를 클릭하면 메모를 적을 수 있습니다</li>
-    <li>노드·화살표 선택 후 Delete: 삭제</li>
-    <li>노드 역할은 화살표 연결에 따라 자동 결정됩니다. 나가는 화살표만 있으면 시작, 들어오는 화살표만 있으면 목표, 둘 다 있거나 화살표가 없으면 일반입니다</li>
-    <li>노드를 선택해 진행 상태(미착수·진행 중·완료·중단·실패)와 메모를 편집합니다. 상태와 자동 역할에 따라 표시가 달라집니다</li>
-    <li>포커스 모드: 버튼을 누른 뒤 시작 노드를 선택하면 화살표 방향으로 이어지는 경로를 표시합니다. 선택 노드로 들어오는 화살표는 경로에 포함하지 않으며, 포커스 중 다른 노드를 선택해도 경로는 고정됩니다. 새로 만든 노드와 그 연결 화살표는 포커스 종료 전까지 계속 표시되어 편집·삭제할 수 있습니다</li>
-    <li>상태 보기: 툴바에서 상태를 고르면 그 상태의 노드는 진하게, 나머지 노드와 화살표는 흐리게 표시합니다. 파일에는 저장되지 않는 화면 설정입니다</li>
-    <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양, 화살촉 크기, 줄 굵기를 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
+    <li>노드·화살표 클릭: 오른쪽 패널에서 진행 상태와 메모 편집</li>
+    <li>Delete: 선택한 노드·화살표 삭제 / 마우스 오른쪽 버튼: 편집 메뉴</li>
+    <li>노드 드래그: 위치 이동 / 빈 곳 드래그: 화면 이동</li>
+    <li>Ctrl+Z, Ctrl+Y(Ctrl+Shift+Z): 되돌리기·다시 실행</li>
+  </ul>
+  <h3 class="hh">진행 상태</h3>
+  <ul class="hint">
+    <li>시작·미착수·진행 중·완료·중단·실패·종료. 시작과 종료는 화살표가 아니라 진행 상태로 직접 정합니다</li>
+    <li>상태에 따라 노드 색이 달라지며, 색은 설정에서 바꿀 수 있습니다</li>
+    <li>노드를 선택하면 그 노드에 연결된 선이 검정으로 굵게 표시됩니다</li>
+  </ul>
+  <h3 class="hh">보기·정렬</h3>
+  <ul class="hint">
+    <li>상태 보기: 고른 상태의 노드는 진하게, 나머지는 흐리게 표시하고 검색 목록도 그 상태만 보여 줍니다 (파일에 저장되지 않는 화면 설정)</li>
+    <li>간편 보기: 노드를 제목 한 줄짜리 작은 상자로 표시합니다</li>
+    <li>포커스 모드: 시작 노드를 고르면 그 노드에서 화살표 방향으로 이어지는 경로만 표시합니다. 포커스 중 새로 만든 노드는 계속 보이며, 종료하면 전체가 다시 보입니다</li>
+    <li>정렬: 피라미드, 역피라미드, 다이아몬드, 원형, 격자, 트리 탑다운·바텀업, 연결 많은 순</li>
+  </ul>
+  <h3 class="hh">찾기</h3>
+  <ul class="hint">
+    <li>상단 검색: 노드 제목·메모를 검색하고 결과를 누르면 그 노드로 이동합니다. 검색창이 비어 있을 때 누르면 연결(화살표)이 많은 순서의 목록이 나옵니다</li>
+  </ul>
+  <h3 class="hh">저장</h3>
+  <ul class="hint">
+    <li>편집 내용은 노드 파일로 자동 저장됩니다. 설정에서 색·모양·연결선을 바꾸고 JSON 저장·불러오기, 데이터 폴더 지정도 할 수 있습니다</li>
   </ul>
   <button id="btnHelpClose">닫기</button>
 </dialog>
@@ -187,15 +212,30 @@
 
 <dialog id="setDlg">
   <h2 style="margin-top:0;font-size:17px">설정</h2>
+  <input type="color" id="colorPicker" tabindex="-1" aria-hidden="true" style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0">
+
+  <h3 class="hh">화면</h3>
   <label>노드 모양
     <select id="s_shape"><option value="rect">사각형</option><option value="circle">원형</option></select>
   </label>
-  <div class="cset"><span class="cl">노드 색 (안쪽 채우기)</span>
+  <label>캔버스 바깥 여백 (px)
+    <input type="number" id="s_canvasPadding" min="0" max="1000" step="20">
+  </label>
+  <div class="muted">그래프 주위에 확보할 빈 작업 공간입니다. 전체 그래프 보기에도 포함됩니다.</div>
+
+  <h3 class="hh">색</h3>
+  <div class="cset"><span class="cl">기본 노드 색 (미착수 노드의 안쪽 색)</span>
     <div class="crow"><input type="text" id="s_nodeColor" maxlength="7" placeholder="#ffffff"><span class="sw" id="sw_nodeColor"></span></div>
     <div class="presets" id="p_nodeColor"></div></div>
   <div class="cset"><span class="cl">배경 색</span>
     <div class="crow"><input type="text" id="s_bgColor" maxlength="7" placeholder="#fafafa"><span class="sw" id="sw_bgColor"></span></div>
     <div class="presets" id="p_bgColor"></div></div>
+  <div class="cset"><span class="cl">진행 상태 색</span>
+    <div class="muted">노드 테두리·상태 점·연결선에 쓰이고, 노드 안쪽은 이 색을 옅게 칠합니다. 미착수 노드의 안쪽은 위의 기본 노드 색입니다.</div>
+    <div id="statusColorList"></div>
+    <button id="btnStatusColorDefault" type="button">상태 색 기본값으로</button></div>
+
+  <h3 class="hh">연결선</h3>
   <label>연결선 모양
     <select id="s_lineStyle"><option value="curve">곡선</option><option value="straight">직선</option></select>
   </label>
@@ -207,21 +247,20 @@
   </label>
   <label style="display:flex;align-items:center;gap:6px;margin-top:10px"><input type="checkbox" id="s_allowMutualEdges"> A↔B 양방향 연결 허용</label>
   <div class="muted">끄면 A에서 B로 연결된 상태에서 B에서 A로의 화살표 연결을 막습니다. 켜면 서로 연결되는 화살표를 만들 수 있지만 선이 복잡해집니다.</div>
-  <label>캔버스 바깥 여백 (px)
-    <input type="number" id="s_canvasPadding" min="0" max="1000" step="20">
-  </label>
-  <div class="muted">그래프 주위에 확보할 빈 작업 공간입니다. 전체 그래프 보기에도 포함됩니다.</div>
-  <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+
+  <h3 class="hh">그래프 파일 (JSON)</h3>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
     <button id="btnPickProject" type="button">JSON 불러오기</button>
     <label class="btn">다른 위치에서 고르기<input type="file" id="file" accept=".json"></label>
     <button id="btnSave">JSON 저장</button>
-    <button id="btnSettingsDefault">기본값으로</button>
   </div>
-  <h3 style="font-size:14px;margin:14px 0 4px">데이터 폴더</h3>
+
+  <h3 class="hh">데이터 폴더</h3>
   <div class="muted">노드 파일과 변경 이력을 이 폴더에 저장하고 읽습니다. 비워 두면 프로젝트 폴더를 씁니다. 바꾼 뒤에는 편집기를 다시 실행해야 적용됩니다.</div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px"><button id="btnDataFolderPick" type="button">폴더 고르기</button><button id="btnDataFolderDefault" type="button">프로젝트 폴더로 되돌리기</button></div>
   <div id="dataFolderStatus" class="muted" style="margin-top:6px;word-break:break-all"></div>
-  <button id="btnSetClose">닫기</button>
+
+  <div class="dlg-foot"><button id="btnSettingsDefault" type="button">설정 기본값으로</button><button id="btnSetClose" type="button">닫기</button></div>
 </dialog>
 <dialog id="folderDlg" style="max-width:560px;width:90vw">
   <h3 style="margin-top:0;font-size:16px">데이터 폴더 고르기</h3>
@@ -239,19 +278,30 @@
 
 <script>
 const KEY = 'causal-editor-v3';
-const VERSION_KEY = 'causal-editor-versions-v1';
 const SIDEBAR_KEY = 'causal-editor-sidebar-hidden-v1';
 const RECT = {w: 200, h: 110}, CIRCLE = {w: 130, h: 130};
 const DEFAULT_SETTINGS = {shape:'rect', nodeColor:'#ffffff', bgColor:'#fafafa', lineStyle:'curve', arrowSize:14, lineWidth:1, allowMutualEdges:false, canvasPadding:400};
 const NUMBER_CTRL = [['s_arrowSize','arrowSize',4,60],['s_lineWidth','lineWidth',0.5,10]];
 const NODE_FIELDS = [['f_title','title'],['f_memo','memo']];
 const NODE_STATUSES = {
-  not_started: {label:'미착수', color:'#94a3b8'},
-  in_progress: {label:'진행 중', color:'#2563eb'},
-  completed: {label:'완료', color:'#16a34a'},
-  stopped: {label:'중단', color:'#64748b'},
-  failed: {label:'실패', color:'#dc2626'}
+  start: {label:'시작', color:'#f5b400'},
+  not_started: {label:'미착수', color:'#9aa5b8'},
+  in_progress: {label:'진행 중', color:'#3b82f6'},
+  completed: {label:'완료', color:'#22c55e'},
+  stopped: {label:'중단', color:'#ef4444'},
+  failed: {label:'실패', color:'#d946ef'},
+  end: {label:'종료', color:'#06b6d4'}
 };
+const DEFAULT_STATUS_COLORS = Object.fromEntries(Object.entries(NODE_STATUSES).map(([k, v]) => [k, v.color]));
+// 설정에서 바꾼 상태 색(S.settings.statusColors)을 NODE_STATUSES에 반영합니다. 없거나 잘못된 값이면 기본 색입니다.
+function applyStatusColors() {
+  const custom = (S && S.settings && S.settings.statusColors) || {};
+  for (const key of Object.keys(NODE_STATUSES)) {
+    NODE_STATUSES[key].color = /^#[0-9a-fA-F]{6}$/.test(custom[key]) ? custom[key].toLowerCase() : DEFAULT_STATUS_COLORS[key];
+  }
+}
+// 진행 상태에 따라 노드 안쪽을 상태 색으로 옅게 칠합니다. 미착수는 설정의 기본 노드 색을 씁니다.
+const tintColor = (hex, a) => '#' + [1, 3, 5].map(i => Math.round(255 - (255 - parseInt(hex.slice(i, i + 2), 16)) * a).toString(16).padStart(2, '0')).join('');
 const EDGE_FIELDS = [['e_memo','memo']];
 const SELECT_CTRL = [['s_shape','shape'],['s_lineStyle','lineStyle']];
 const COLOR_CTRL = ['nodeColor','bgColor'];   // 네이티브 색상 창 대신 입력칸 + 색 견본 방식
@@ -281,7 +331,6 @@ let statusFilter = 'all';
 let compactView = false;
 const isDimmedByStatus = n => statusFilter !== 'all' && n.status !== statusFilter;
 let focusCreatedNodeIds = new Set(), focusCreatedEdgeIds = new Set();
-let graphSaveTimer = null;
 let lastEditAt = 0;   // 마지막 편집 시각: 편집 직후에는 파일을 다시 읽지 않습니다
 let mdReadFailed = false;   // 노드 md를 읽지 못한 상태: 이때는 파일과 JSON을 아무것도 쓰지 않습니다
 const undoStack = [], redoStack = [];
@@ -300,7 +349,7 @@ let VERSION_LIST = [];
 function initial() {
   return {nextId: 1, nodes: [], edges: [], settings: {...DEFAULT_SETTINGS}};
 }
-function ensureSettings() { S.settings = Object.assign({}, DEFAULT_SETTINGS, S.settings || {}); delete S.settings.selectionColor; delete S.settings.highlightColor; delete S.settings.lineColor; }
+function ensureSettings() { S.settings = Object.assign({}, DEFAULT_SETTINGS, S.settings || {}); if (!S.settings.statusColors || typeof S.settings.statusColors !== 'object') S.settings.statusColors = {}; delete S.settings.selectionColor; delete S.settings.highlightColor; delete S.settings.lineColor; }
 function load() { try { const v = localStorage.getItem(KEY); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
 function snapshotGraph() { return JSON.stringify(S); }
 function updateHistoryButtons() {
@@ -326,17 +375,14 @@ function recordHistory(group = null) {
 }
 async function restoreHistory(snapshot) {
   S = JSON.parse(snapshot);
-  normalizeNodeStatuses(); ensureSettings();
+  prepareState();
   sel = {type:null, id:null};
   focusMode = false; focusNodeId = null;
   focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
   $('#btnFocus').textContent = '포커스 모드';
   $('#btnFocus').setAttribute('aria-pressed', 'false');
   historyCurrent = snapshotGraph(); historyGroup = null;
-  try { localStorage.setItem(KEY, historyCurrent); } catch (e) {}
-  clearTimeout(graphSaveTimer);
-  if (location.protocol !== 'file:') await persistGraph(S);
-  await syncNodeFiles();
+  await persistNow();
   render(); renderPanel(); renderSettings(); fitView(); updateHistoryButtons();
 }
 async function undo() {
@@ -351,16 +397,35 @@ async function redo() {
   const next = redoStack.pop();
   await restoreHistory(next);
 }
+/* ---------- 저장 ----------
+   원본은 노드 md 파일(syncNodeFiles)입니다. 내부데이터/그래프.json(persistGraph)은 설정과 백업용 사본입니다.
+   브라우저(localStorage)에는 설정만 보관합니다(cacheSettings). 그래프 내용은 브라우저에 복사하지 않습니다.
+   편집하면 save()가 설정을 바로 캐시하고, 400ms 뒤 persistNow()가 md → JSON 순서로 한 번에 저장합니다. */
+function cacheSettings() { try { localStorage.setItem(KEY, JSON.stringify({settings: S.settings})); } catch (e) {} }
+let persistTimer = null, persistChain = Promise.resolve();
+function schedulePersist() { clearTimeout(persistTimer); persistTimer = setTimeout(persistNow, 400); }
+// 저장은 항상 순서대로 한 번에 하나씩 실행하고, 실행 시점의 최신 그래프를 저장합니다.
+function persistNow() {
+  clearTimeout(persistTimer); persistTimer = null;
+  persistChain = persistChain.then(doPersist, doPersist);
+  return persistChain;
+}
+async function doPersist() {
+  cacheSettings();
+  await syncNodeFiles();
+  if (location.protocol !== 'file:') await persistGraph(S);
+}
+// 탭을 닫거나 숨길 때, 아직 저장 전인 편집이 있으면 노드 파일을 바로 보냅니다(keepalive라 페이지가 닫혀도 전송됩니다).
+window.addEventListener('pagehide', () => {
+  if (persistTimer === null) return;
+  clearTimeout(persistTimer); persistTimer = null;
+  syncNodeFiles(true);
+});
 function save(historyGroupKey = null) {
   lastEditAt = Date.now();
   recordHistory(historyGroupKey);
-  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
-  clearTimeout(graphSaveTimer);
-  if (location.protocol !== 'file:') {
-    const snapshot = JSON.parse(JSON.stringify(S));
-    graphSaveTimer = setTimeout(() => persistGraph(snapshot), 250);
-  }
-  scheduleMd();
+  cacheSettings();
+  schedulePersist();
 }
 async function persistGraph(data) {
   if (mdReadFailed) return true;   // md를 못 읽은 상태에서는 JSON 사본도 덮어쓰지 않습니다
@@ -383,19 +448,6 @@ async function loadVersions() {
   const j = await r.json();
   if (!r.ok || !j.ok) throw new Error(j.error || '변경 이력을 읽지 못했습니다.');
   VERSION_LIST = j.versions;
-  // 이전 브라우저 로컬 저장소에 남아 있는 버전을 파일로 한 번 옮깁니다.
-  let legacy = [];
-  try { legacy = JSON.parse(localStorage.getItem(VERSION_KEY) || '[]'); } catch (e) {}
-  if (Array.isArray(legacy) && legacy.length) {
-    for (const v of [...legacy].reverse()) {
-      if (!v?.data || VERSION_LIST.some(existing => JSON.stringify(existing.data) === JSON.stringify(v.data))) continue;
-      const migrated = await postVersion({summary:v.summary || '이전 브라우저 버전', data:v.data});
-      VERSION_LIST.unshift(migrated);
-    }
-    localStorage.removeItem(VERSION_KEY);
-    const refreshed = await fetch('/api/versions');
-    VERSION_LIST = (await refreshed.json()).versions || [];
-  }
 }
 async function createVersion(summary, data = S, force = false) {
   const snapshot = JSON.parse(JSON.stringify(data));
@@ -437,10 +489,9 @@ async function fetchNodeFiles() {
   return j.files || [];
 }
 async function fetchBackupGraph() {
-  const legacyId = localStorage.getItem('causal-editor-active-graph-v1') || '';
-  const r = await fetch(`/api/graph?legacy=${encodeURIComponent(legacyId)}`), j = await r.json();
+  const r = await fetch('/api/graph'), j = await r.json();
   if (!r.ok || !j.ok) throw new Error(j.error || '그래프 JSON을 읽지 못했습니다.');
-  return j;   // {data, source: 'internal' | 'legacy' | undefined}
+  return j;   // {data}  (파일이 없으면 data는 null)
 }
 // 파일 내용만 비교합니다 (반올림한 위치 기준). 같으면 다시 그리지 않습니다.
 const graphSnapshot = g => JSON.stringify([
@@ -462,7 +513,7 @@ async function loadSavedGraph(localData) {
     mdReadFailed = true;
     S = {...initial(), settings: settingsFrom?.settings || {...DEFAULT_SETTINGS}};
     S.edges = S.edges || []; S.nextId = S.nextId || 1;
-    normalizeNodeStatuses(); ensureSettings(); resetHistory();
+    prepareState(); resetHistory();
     render(); renderPanel(); renderSettings(); fitView();
     setFstat(`노드 파일을 읽지 못했습니다. 파일 상태를 확인한 뒤 '파일 다시 읽기'를 누르세요: ${loadError.message}`);
     return;
@@ -472,17 +523,13 @@ async function loadSavedGraph(localData) {
   if (files.length) {
     const g = NodeMd.parseNodeFiles(files);
     S = {nextId: 1, nodes: g.nodes, edges: g.edges, settings: settingsFrom?.settings || {}};
-  } else if (j && j.source === 'legacy' && backup) {
-    S = backup;        // 예전 위치(노드파일/그래프.json)에 있던 그래프를 파일 형식으로 옮깁니다
   } else {
     S = {...initial(), settings: settingsFrom?.settings || {...DEFAULT_SETTINGS}};
   }
   S.edges = S.edges || []; S.nextId = S.nextId || 1;
-  normalizeNodeStatuses(); ensureSettings();
+  prepareState();
   resetHistory();
-  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
-  await persistGraph(S);
-  await syncNodeFiles();
+  await persistNow();
   render(); renderPanel(); renderSettings(); fitView();
 }
 
@@ -506,14 +553,13 @@ async function reloadFromNodeFiles(manual = false) {
   const g = files.length ? NodeMd.parseNodeFiles(files) : {nodes: [], edges: []};
   if (graphSnapshot(g) === graphSnapshot(S)) { if (manual) setFstat('노드 파일이 바뀌지 않았습니다.'); return; }
   S = {...S, nodes: g.nodes, edges: g.edges};
-  normalizeNodeStatuses(); ensureSettings();
+  prepareState();
   resetHistory();
   sel = {type: null, id: null};
   focusMode = false; focusNodeId = null;
   focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
   $('#btnFocus').textContent = '포커스 모드';
   $('#btnFocus').setAttribute('aria-pressed', 'false');
-  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
   await persistGraph(S);
   render(); renderPanel();
   setFstat(`노드 파일에서 다시 읽었습니다 (노드 ${g.nodes.length}개, 화살표 ${g.edges.length}개)`);
@@ -524,16 +570,13 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) relo
 async function applyGraph(data) {
   S = JSON.parse(JSON.stringify(data));
   S.edges = S.edges || []; S.nextId = S.nextId || 1;
-  normalizeNodeStatuses(); ensureSettings();
+  prepareState();
   resetHistory();
   focusMode = false; focusNodeId = null;
   focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
   $('#btnFocus').textContent = '포커스 모드';
   $('#btnFocus').setAttribute('aria-pressed', 'false');
-  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
-  clearTimeout(graphSaveTimer);
-  await persistGraph(S);
-  await syncNodeFiles();
+  await persistNow();
   select(null, null); renderSettings(); fitView();
 }
 const node = id => S.nodes.find(n => n.id === id);
@@ -550,11 +593,12 @@ function normalizeNodeStatuses() {
     delete e.label;
   }
 }
+// 시작·종료는 화살표가 아니라 진행 상태(시작/종료)로 직접 정합니다.
+// 불러온 그래프를 쓰기 전에 상태값과 설정을 보정합니다 (불러오는 모든 경로에서 같은 순서로 호출).
+function prepareState() { normalizeNodeStatuses(); ensureSettings(); }
 function nodeKind(n) {
-  const hasIncoming = S.edges.some(e => e.to === n.id);
-  const hasOutgoing = S.edges.some(e => e.from === n.id);
-  if (hasOutgoing && !hasIncoming) return 'start';
-  if (hasIncoming && !hasOutgoing) return 'goal';
+  if (n.status === 'start') return 'start';
+  if (n.status === 'end') return 'goal';
   return 'normal';
 }
 const startNodes = () => S.nodes.filter(n => nodeKind(n) === 'start');
@@ -620,9 +664,11 @@ function visibleSets() {
 function render() {
   const g = analyze(), st = S.settings, D = dims(), W = D.w, H = D.h;
   if (focusNodeId && !node(focusNodeId)) focusNodeId = null;
+  applyStatusColors();
   const {visibleNodeIds, visibleEdgeIds, focusPathEdgeIds} = visibleSets();
   $('#stage').style.background = st.bgColor;
-  const markerColors = new Set(Object.values(NODE_STATUSES).map(status => status.color));
+  const EDGE_HOT = '#111827';   // 선택한 노드에 연결된 선을 강조하는 검정
+  const markerColors = new Set([...Object.values(NODE_STATUSES).map(status => status.color), EDGE_HOT]);
   const arrowPx = Math.max(4, Number(st.arrowSize) || 14), linePx = Math.max(0.5, Number(st.lineWidth) || 1);
   const markerAttrs = `viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="${arrowPx}" markerHeight="${arrowPx}" orient="auto-start-reverse"`;
   let h = `<defs>${[...markerColors].map(color => `<marker id="arr-${color.slice(1)}" ${markerAttrs}><path d="M0,0L10,5L0,10z" fill="${color}"/></marker>`).join('')}</defs>`;
@@ -645,11 +691,15 @@ function render() {
     }
   }
 
+  let hotOut = '';
   for (const e of S.edges) {
     if (!visibleEdgeIds.has(e.id)) continue;
+    let out = '';
     const a = node(e.from), b = node(e.to);
+    // 선택한 노드에 들어오거나 나가는 선은 검정으로 강조하고, 다른 선 위에 그립니다
+    const hot = sel.type === 'node' && (e.from === sel.id || e.to === sel.id);
     const edgeDim = isDimmedByStatus(a) || isDimmedByStatus(b);
-    h += `<g opacity="${edgeDim ? 0.2 : 1}">`;
+    out += `<g opacity="${edgeDim ? 0.2 : 1}">`;
     const forward = a.x + W / 2 <= b.x + W / 2;
     const x1 = forward ? a.x + W : a.x, x2 = forward ? b.x : b.x + W;
     const offsets = focusOffsets.get(e.id) || {start: 0, end: 0};
@@ -664,23 +714,24 @@ function render() {
     const aStatus = NODE_STATUSES[a.status] || NODE_STATUSES.not_started;
     const bStatus = NODE_STATUSES[b.status] || NODE_STATUSES.not_started;
     const sameStatus = a.status === b.status;
-    const color = sameStatus ? aStatus.color : bStatus.color;
-    const stroke = sameStatus ? color : `url(#grad-${esc(e.id)})`;
-    const w = linePx;
-    if (!sameStatus) h += `<defs><linearGradient id="grad-${esc(e.id)}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0%" stop-color="${aStatus.color}"/><stop offset="50%" stop-color="${aStatus.color}"/><stop offset="50%" stop-color="${bStatus.color}"/><stop offset="100%" stop-color="${bStatus.color}"/></linearGradient></defs>`;
-    h += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${w}" marker-end="url(#arr-${color.slice(1)})"/>`;
+    const color = hot ? EDGE_HOT : sameStatus ? aStatus.color : bStatus.color;
+    const stroke = (hot || sameStatus) ? color : `url(#grad-${esc(e.id)})`;
+    const w = hot ? linePx + 1 : linePx;
+    if (!sameStatus && !hot) out += `<defs><linearGradient id="grad-${esc(e.id)}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0%" stop-color="${aStatus.color}"/><stop offset="50%" stop-color="${aStatus.color}"/><stop offset="50%" stop-color="${bStatus.color}"/><stop offset="100%" stop-color="${bStatus.color}"/></linearGradient></defs>`;
+    out += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${w}" marker-end="url(#arr-${color.slice(1)})"/>`;
     const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 8;
     const edgeMemoSummary = e.memo ? titleLines(e.memo, 14, 1)[0] : '';
-    if (edgeMemoSummary && !compactView) h += `<text x="${mx}" y="${my}" font-size="11" fill="#4b5563" text-anchor="middle" paint-order="stroke" stroke="${st.bgColor}" stroke-width="4" pointer-events="none"><title>${esc(e.memo)}</title>${esc(edgeMemoSummary)}</text>`;
-    h += `<path d="${d}" fill="none" stroke="transparent" stroke-width="14" data-edge="${e.id}" style="cursor:pointer"/></g>`;
+    if (edgeMemoSummary && !compactView) out += `<text x="${mx}" y="${my}" font-size="11" fill="#4b5563" text-anchor="middle" paint-order="stroke" stroke="${st.bgColor}" stroke-width="4" pointer-events="none"><title>${esc(e.memo)}</title>${esc(edgeMemoSummary)}</text>`;
+    out += `<path d="${d}" fill="none" stroke="transparent" stroke-width="14" data-edge="${e.id}" style="cursor:pointer"/></g>`;
+    if (hot) hotOut += out; else h += out;
   }
+  h += hotOut;
 
   for (const n of S.nodes) {
     if (!visibleNodeIds.has(n.id)) continue;
     const isSel = sel.type === 'node' && sel.id === n.id;
-    const kind = nodeKind(n);
-    const fill = kind === 'start' ? '#f0faf4' : kind === 'goal' ? '#fdf3f3' : st.nodeColor;
     const status = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
+    const fill = (NODE_STATUSES[n.status] && n.status !== 'not_started') ? tintColor(status.color, 0.12) : st.nodeColor;
     const stroke = isSel ? '#1a1d21' : status.color;
     const sw = isSel ? 2.5 : 1.5;
     let body;
@@ -737,7 +788,6 @@ function renderPanel() {
   $('#nodeForm').hidden = !n;
   $('#edgeBox').hidden = !e;
   if (n) {
-    $('#f_kind').value = nodeKind(n) === 'start' ? '시작' : nodeKind(n) === 'goal' ? '목표' : '일반';
     for (const [id, key] of NODE_FIELDS) $('#' + id).value = n[key] ?? '';
     $('#f_status').value = n.status || 'not_started';
   }
@@ -815,12 +865,50 @@ function select(type, id) {
 function searchNodes(query) {
   const q = query.trim().toLocaleLowerCase();
   if (!q) return [];
-  return S.nodes.filter(n => `${n.title || ''}\n${n.memo || ''}`.toLocaleLowerCase().includes(q));
+  return S.nodes.filter(n => statusMatches(n) && `${n.title || ''}\n${n.memo || ''}`.toLocaleLowerCase().includes(q));
+}
+// 화살표(들어오는 + 나가는)가 많은 순서의 노드 목록. 연결이 없는 노드는 뺍니다.
+// 옵션: listAll=true이면 연결 없는 노드도 맨 끝에 넣고, byStatus=true이면 상태 보기에서 고른 상태의 노드만 남깁니다.
+function rankedNodes({listAll = false, byStatus = false} = {}) {
+  const inC = new Map(), outC = new Map();
+  for (const e of S.edges) { outC.set(e.from, (outC.get(e.from) || 0) + 1); inC.set(e.to, (inC.get(e.to) || 0) + 1); }
+  return S.nodes
+    .map(n => ({n, inn: inC.get(n.id) || 0, out: outC.get(n.id) || 0}))
+    .map(r => ({...r, total: r.inn + r.out}))
+    .filter(r => (listAll || r.total > 0) && (!byStatus || statusMatches(r.n)))
+    .sort((a, b) => b.total - a.total || (a.n.title || '').localeCompare(b.n.title || '', 'ko'));
+}
+const statusMatches = n => statusFilter === 'all' || n.status === statusFilter;
+const statusDot = n => {
+  const st = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
+  return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${st.color};margin-right:5px;vertical-align:1px"></span>${esc(st.label)}`;
+};
+// 검색창이 비어 있을 때 보여 주는, 연결이 많은 순서의 목록
+function renderRankedNodes(box) {
+  const rows = rankedNodes({listAll: true, byStatus: true});
+  const filtered = statusFilter !== 'all';
+  if (!rows.length) {
+    if (!filtered) { box.hidden = true; return; }
+    const empty = document.createElement('div'); empty.textContent = '이 상태의 노드가 없습니다.';
+    empty.style.cssText = 'padding:10px;color:var(--muted);font-size:13px'; box.appendChild(empty); box.hidden = false; return;
+  }
+  const head = document.createElement('div');
+  head.textContent = filtered ? `${NODE_STATUSES[statusFilter].label} 노드 · 연결이 많은 순서` : '연결이 많은 순서';
+  head.style.cssText = 'padding:8px 12px 4px;color:var(--muted);font-size:11px;font-weight:600';
+  box.appendChild(head);
+  for (const r of rows.slice(0, 50)) {
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'option');
+    b.innerHTML = `${esc(r.n.title || '(제목 없음)')}<span class="search-detail">${statusDot(r.n)} · 연결 ${r.total}개 · 들어오는 ${r.inn} · 나가는 ${r.out}</span>`;
+    b.addEventListener('click', () => goToSearchResult(r.n.id));
+    box.appendChild(b);
+  }
+  if (rows.length > 50) { const more = document.createElement('div'); more.textContent = `외 ${rows.length - 50}개`; more.style.cssText = 'padding:8px;color:var(--muted);font-size:12px'; box.appendChild(more); }
+  box.hidden = false;
 }
 function renderSearchResults() {
   const input = $('#nodeSearch'), box = $('#searchResults'), q = input.value.trim();
   box.replaceChildren();
-  if (!q) { box.hidden = true; return; }
+  if (!q) { renderRankedNodes(box); return; }
   const matches = searchNodes(q);
   if (!matches.length) {
     const empty = document.createElement('div'); empty.textContent = '검색 결과가 없습니다.';
@@ -828,7 +916,7 @@ function renderSearchResults() {
   } else {
     for (const n of matches.slice(0, 50)) {
       const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role','option');
-      b.innerHTML = `${esc(n.title || '(제목 없음)')}<span class="search-detail">${esc(trunc(n.memo || '메모 없음', 90))}</span>`;
+      b.innerHTML = `${esc(n.title || '(제목 없음)')}<span class="search-detail">${statusDot(n)} · ${esc(trunc(n.memo || '메모 없음', 80))}</span>`;
       b.addEventListener('click', () => goToSearchResult(n.id)); box.appendChild(b);
     }
     if (matches.length > 50) { const more = document.createElement('div'); more.textContent = `외 ${matches.length - 50}개 결과`; more.style.cssText = 'padding:8px;color:#667085;font-size:12px'; box.appendChild(more); }
@@ -845,9 +933,14 @@ function goToSearchResult(id) {
   stage.scrollLeft += x - stage.clientWidth / 2;
   stage.scrollTop += y - stage.clientHeight / 2;
   $('#searchResults').hidden = true;
+  searchFocusGuard = true;   // 아래 focus()가 목록을 다시 열지 않게 합니다
   $('#nodeSearch').focus();
+  searchFocusGuard = false;
 }
+let searchFocusGuard = false;
 $('#nodeSearch').addEventListener('input', renderSearchResults);
+$('#nodeSearch').addEventListener('focus', () => { if (!searchFocusGuard) renderSearchResults(); });
+$('#nodeSearch').addEventListener('click', () => { if ($('#searchResults').hidden) renderSearchResults(); });
 $('#nodeSearch').addEventListener('keydown', e => {
   if (e.key === 'Enter') { const first = searchNodes(e.currentTarget.value)[0]; if (first) { e.preventDefault(); goToSearchResult(first.id); } }
   if (e.key === 'Escape') $('#searchResults').hidden = true;
@@ -959,9 +1052,9 @@ function nodeMd(n) {
 }
 
 function pathsMd() {
-  const L = ['# 시작에서 목표까지의 경로', '', `- 내보낸 날짜: ${today()}`, ''];
+  const L = ['# 시작에서 종료까지의 경로', '', `- 내보낸 날짜: ${today()}`, ''];
   const paths = enumeratePaths(20);
-  if (!paths.length) L.push('_시작 노드와 목표 노드를 지정하고 그 사이를 화살표로 연결하면 경로가 표시됩니다._');
+  if (!paths.length) L.push('_진행 상태를 시작·종료로 지정한 노드 사이를 화살표로 연결하면 경로가 표시됩니다._');
   else paths.forEach((p, i) => {
     const parts = [linkTo(node(edge(p[0]).from))];
     for (const eid of p) { const e = edge(eid); parts.push(linkTo(node(e.to))); }
@@ -980,26 +1073,25 @@ function download(name, text, type) {
 
 /* 노드 파일 자동 저장: 같은 폴더의 server.js(인과편집기.bat으로 시작)가 받아서 '노드파일' 폴더에 씁니다.
    페이지를 file://로 직접 열면 서버가 없어 저장되지 않습니다. */
-let mdTimer = null;
-
 const setFstat = t => { $('#fstat').textContent = t; };
 
-function scheduleMd() { clearTimeout(mdTimer); mdTimer = setTimeout(syncNodeFiles, 400); }
-
-async function syncNodeFiles() {
+async function syncNodeFiles(keepalive = false) {
   if (location.protocol === 'file:') { setFstat('서버 없이 열렸습니다. 인과편집기.bat을 더블클릭해 주세요.'); return; }
   if (mdReadFailed) return;   // md를 못 읽은 상태에서 쓰면 기존 노드 파일이 지워질 수 있습니다
   const files = S.nodes.map(n => ({name: fileName(n), text: nodeMd(n)}));
   files.push({name: '_경로.md', text: pathsMd()});
   try {
+    const body = JSON.stringify({files});
     const r = await fetch('/api/nodes', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({files})
+      body,
+      keepalive: keepalive && body.length < 60000   // 페이지가 닫혀도 전송(브라우저가 64KB까지 허용)
     });
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
-    setFstat(`노드파일 ${j.count}개 자동 저장됨 (${new Date().toLocaleTimeString()})`);
+    // changed는 PC 서버만 알려 줍니다(안드로이드 앱 등 다른 저장소는 없을 수 있어 전체 개수로 대신합니다)
+    setFstat(`노드파일 ${j.count}개 중 ${j.changed ?? j.count}개 저장됨 (${new Date().toLocaleTimeString()})`);
   } catch (err) {
     setFstat('자동 저장 실패: 인과편집기.bat으로 연 페이지인지 확인하세요.');
   }
@@ -1053,7 +1145,7 @@ function layoutTree(bottomUp) {
   const visit = (id) => { order.push(id); for (const c of children.get(id) || []) visit(c); };
   const rootIds = [...new Set(S.nodes.map(n => n.id).filter(id => depth.get(id) === 0))];
   for (const id of byPosition(rootIds)) visit(id);
-  // 목표 노드(들어오는 화살표만 있는 노드)는 항상 맨 끝 줄에 모아서, 시작과 끝이 양 끝에 오게 합니다.
+  // 종료 상태의 노드는 항상 맨 끝 줄에 모아서, 시작과 끝이 양 끝에 오게 합니다.
   const goalSet = new Set(goalNodes().map(n => n.id));
   const orderNoGoal = order.filter(id => !goalSet.has(id)), orderGoal = order.filter(id => goalSet.has(id));
   order.length = 0;
@@ -1066,6 +1158,15 @@ function layoutTree(bottomUp) {
     n.x = Math.round(40 + depth.get(id) * INDENT);
     n.y = Math.round(40 + r * rowH);
   });
+}
+
+// 연결 많은 순 정렬: 화살표(들어오는 + 나가는)가 많은 노드부터 위에서 아래로 한 줄에 하나씩 쌓습니다. 연결이 없는 노드는 맨 끝에 둡니다.
+// 포커스 모드에서는 포커스로 보이는 노드끼리만 세고 배열합니다.
+function layoutRank() {
+  const ROW = dims().h + 26;
+  const ranked = rankedNodes().map(r => r.n), seen = new Set(ranked);
+  const rest = S.nodes.filter(n => !seen.has(n)).sort((a, b) => a.y - b.y || a.x - b.x);
+  [...ranked, ...rest].forEach((n, i) => { n.x = 40; n.y = Math.round(40 + i * ROW); });
 }
 
 function layoutNodes(mode) {
@@ -1086,6 +1187,7 @@ function layoutNodes(mode) {
   for (const n of S.nodes) if (!level.has(n.id)) level.set(n.id, maxL + 1);
   const goals = goalNodes();
   if (mode === 'treeDown' || mode === 'treeUp') { layoutTree(mode === 'treeUp'); return; }
+  if (mode === 'rank') { layoutRank(); return; }
   if (mode === 'circle') {
     const R = Math.max(220, N * (Math.max(W, H) + 30) / (2 * Math.PI));
     const cx = R + W / 2 + 40, cy = R + H / 2 + 40;
@@ -1198,6 +1300,12 @@ function fitView() {
 
 /* ---------- 설정 ---------- */
 function renderSettings() {
+  applyStatusColors();
+  for (const key of Object.keys(NODE_STATUSES)) {
+    const input = $('#s_sc_' + key), sw = $('#sw_sc_' + key);
+    if (input) input.value = NODE_STATUSES[key].color;
+    if (sw) sw.style.background = NODE_STATUSES[key].color;
+  }
   for (const [id, key] of SELECT_CTRL) $('#' + id).value = S.settings[key];
   for (const [id, key] of NUMBER_CTRL) $('#' + id).value = S.settings[key];
   $('#s_allowMutualEdges').checked = !!S.settings.allowMutualEdges;
@@ -1215,7 +1323,60 @@ function setColor(key, val) {
   save(); render();
 }
 
+// 견본을 누르면 색상 선택 창을 엽니다. preview(색): 고르는 동안 화면만 바꿈, commit(색): 선택을 마치면 저장
+function openColorPicker(sw, current, preview, commit) {
+  const p = $('#colorPicker'), r = sw.getBoundingClientRect();
+  p.style.left = Math.round(r.left) + 'px';
+  p.style.top = Math.round(r.bottom) + 'px';
+  p.value = /^#[0-9a-fA-F]{6}$/.test(current) ? current.toLowerCase() : '#000000';
+  p.oninput = () => preview(p.value);
+  p.onchange = () => commit(p.value);
+  try { p.showPicker(); } catch (e) { p.click(); }
+}
+
+function setStatusColor(key, val) {
+  if (val === DEFAULT_STATUS_COLORS[key]) delete S.settings.statusColors[key];
+  else S.settings.statusColors[key] = val;
+  save(); render(); renderSettings();
+}
+
+function buildStatusColorRows() {
+  const box = $('#statusColorList');
+  box.innerHTML = '';
+  for (const [key, def] of Object.entries(NODE_STATUSES)) {
+    const row = document.createElement('div');
+    row.className = 'crow';
+    row.innerHTML = `<span class="scl">${def.label}</span><input type="text" id="s_sc_${key}" maxlength="7" placeholder="${DEFAULT_STATUS_COLORS[key]}" aria-label="${def.label} 색"><span class="sw" id="sw_sc_${key}"></span>`;
+    box.appendChild(row);
+    const input = row.querySelector('input');
+    const apply = () => {
+      const v = input.value.trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(v)) setStatusColor(key, v.toLowerCase());
+      else input.value = NODE_STATUSES[key].color;   // 잘못된 값이면 되돌림
+    };
+    input.addEventListener('change', apply);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+    const sw = row.querySelector('.sw');
+    sw.title = '클릭해서 색 고르기';
+    sw.onclick = () => openColorPicker(sw, NODE_STATUSES[key].color,
+      v => { S.settings.statusColors[key] = v; sw.style.background = v; input.value = v; render(); },
+      v => setStatusColor(key, v));
+  }
+  $('#btnStatusColorDefault').onclick = () => {
+    S.settings.statusColors = {};
+    save(); render(); renderSettings();
+  };
+}
+
 function buildPresets() {
+  buildStatusColorRows();
+  for (const key of COLOR_CTRL) {
+    const sw = $('#sw_' + key);
+    sw.title = '클릭해서 색 고르기';
+    sw.onclick = () => openColorPicker(sw, S.settings[key],
+      v => { S.settings[key] = v; sw.style.background = v; $('#s_' + key).value = v; render(); },
+      v => setColor(key, v));
+  }
   for (const key of COLOR_CTRL) {
     const box = $('#p_' + key);
     box.innerHTML = '';
@@ -1330,17 +1491,27 @@ function nodeIdAt(x, y) {
 }
 // 노드 자리 편집창의 칸 배치(노드 좌표 기준 px). 노드 모양에 따라 제목·메모 칸 위치가 달라집니다
 function inlineEditorLayout() {
-  if (compactView) return {radius: 8, title: {l: 6, t: 4, w: COMPACT.w - 12, h: 26, fs: 12, bold: 600, nowrap: true}, memo: null, memoTop: Infinity};
+  if (compactView) return {radius: 8,
+    title: {l: 6, t: 4, w: 100, h: 26, fs: 12, bold: 600, nowrap: true}, memo: null, memoTop: Infinity,
+    status: {l: 108, t: 5, w: 56, h: 24, fs: 11}};
   if (S.settings.shape === 'circle') {
     return {radius: '50%', center: true,
       title: {l: 24, t: 26, w: CIRCLE.w - 48, h: 34, fs: 13, bold: 700},
-      memo: {l: 24, t: 62, w: CIRCLE.w - 48, h: 40, fs: 11},
+      memo: {l: 24, t: 62, w: CIRCLE.w - 48, h: 28, fs: 11},
+      status: {l: 29, t: 94, w: 72, h: 20, fs: 11},
       memoTop: 62};
   }
   return {radius: 10,
     title: {l: 6, t: 6, w: RECT.w - 12, h: 40, fs: 14, bold: 700},
-    memo: {l: 6, t: 48, w: RECT.w - 12, h: RECT.h - 48 - 8, fs: 11},
+    memo: {l: 6, t: 48, w: RECT.w - 12, h: 36, fs: 11},
+    status: {l: 6, t: 86, w: 110, h: 18, fs: 11},
     memoTop: 46};
+}
+// 더블클릭한 자리에 따라 처음 커서가 갈 칸: 'status' | 'memo' | 'title'
+function inlineEditorField(px, py) {
+  const L = inlineEditorLayout(), st = L.status;
+  if (st && px >= st.l - 4 && px <= st.l + st.w + 4 && py >= st.t - 4 && py <= st.t + st.h + 4) return 'status';
+  return L.memo && py >= L.memoTop ? 'memo' : 'title';
 }
 function closeInlineEditor(save = true) {
   const box = inlineEditor; if (!box || box.dataset.done) return;
@@ -1350,7 +1521,7 @@ function closeInlineEditor(save = true) {
   box.remove();
   if (inlineEditor === box) inlineEditor = null;
 }
-function openInlineEditor(id, focusMemo) {
+function openInlineEditor(id, field = 'title') {
   const n = node(id); if (!n) return;
   closeInlineEditor(true);
   const stage = $('#stage'), D = dims(), L = inlineEditorLayout();
@@ -1367,11 +1538,19 @@ function openInlineEditor(id, focusMemo) {
   box.dataset.nodeId = id;
   box.style.cssText = `left:${left}px;top:${top}px;width:${D.w}px;height:${D.h}px;transform:scale(${zoom});transform-origin:0 0;`
     + `background:${fill};border:${sw}px solid ${stroke};border-radius:${typeof L.radius === 'number' ? L.radius + 'px' : L.radius}`;
-  const ta = (cls, c, ph) => `<textarea class="${cls}" placeholder="${ph}" rows="1" ${c.nowrap ? 'wrap="off"' : ''} style="left:${c.l - sw}px;top:${c.t - sw}px;width:${c.w}px;height:${c.h}px;font-size:${c.fs}px;font-weight:${c.bold || 400}${L.center ? ';text-align:center' : ''}"></textarea>`;
-  box.innerHTML = ta('ie-title', L.title, '제목') + (L.memo ? ta('ie-memo', L.memo, '메모') : '');
-  const tEl = box.querySelector('.ie-title'), mEl = box.querySelector('.ie-memo');
+  const pos = c => `left:${c.l - sw}px;top:${c.t - sw}px;width:${c.w}px;height:${c.h}px;font-size:${c.fs}px`;
+  const ta = (cls, c, ph) => `<textarea class="${cls}" placeholder="${ph}" rows="1" ${c.nowrap ? 'wrap="off"' : ''} style="${pos(c)};font-weight:${c.bold || 400}${L.center ? ';text-align:center' : ''}"></textarea>`;
+  const options = Object.entries(NODE_STATUSES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+  box.innerHTML = ta('ie-title', L.title, '제목') + (L.memo ? ta('ie-memo', L.memo, '메모') : '')
+    + `<select class="ie-status" aria-label="진행 상태" style="${pos(L.status)}${L.center ? ';text-align:center;text-align-last:center' : ''}">${options}</select>`;
+  const tEl = box.querySelector('.ie-title'), mEl = box.querySelector('.ie-memo'), sEl = box.querySelector('.ie-status');
   tEl.value = n.title || '';
   if (mEl) mEl.value = n.memo || '';
+  sEl.value = NODE_STATUSES[n.status] ? n.status : 'not_started';
+  // 상태를 고르면 편집창 안쪽 색도 바로 그 상태 색으로 바뀝니다
+  sEl.addEventListener('change', () => {
+    box.style.background = sEl.value === 'not_started' ? S.settings.nodeColor : tintColor(NODE_STATUSES[sEl.value].color, 0.12);
+  });
   stage.appendChild(box);
   inlineEditor = box;
   // 편집 칸 바깥을 누르면 저장하고 끝냅니다
@@ -1381,26 +1560,33 @@ function openInlineEditor(id, focusMemo) {
   });
   // 덮은 배경을 눌러도 포커스가 빠지지 않게 합니다
   box.addEventListener('mousedown', e => { if (e.target === box) e.preventDefault(); });
-  // 키: 제목에서 Enter = 저장, 메모에서 Ctrl+Enter = 저장(Enter는 줄바꿈), Esc = 취소, Tab/Shift+Tab = 제목↔메모
+  // 키: 제목에서 Enter = 저장, 메모에서 Ctrl+Enter = 저장(Enter는 줄바꿈), Esc = 취소, Tab/Shift+Tab = 제목 → 메모 → 진행 상태 순환
+  const order = [tEl, mEl, sEl].filter(Boolean);
   box.addEventListener('keydown', e => {
     if (e.isComposing) return;   // 한글 조합 중에는 키를 건드리지 않습니다
     if (e.key === 'Escape') { e.preventDefault(); closeInlineEditor(false); return; }
     if (e.key === 'Enter' && !e.shiftKey && (e.target === tEl || e.ctrlKey || e.metaKey)) { e.preventDefault(); closeInlineEditor(true); return; }
     if (e.key === 'Enter' && e.target === tEl) { e.preventDefault(); return; }
-    if (e.key === 'Tab' && mEl) { e.preventDefault(); (e.target === tEl ? mEl : tEl).focus(); }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const i = order.indexOf(e.target);
+      order[(i + (e.shiftKey ? order.length - 1 : 1)) % order.length].focus();
+    }
   });
   // 제목은 한 줄 취급: 줄바꿈이 붙여 넣어져도 공백으로 바꿉니다
   tEl.addEventListener('input', () => { if (tEl.value.includes('\n')) tEl.value = tEl.value.replace(/\s*\n\s*/g, ' '); });
-  const target = (focusMemo && mEl) || tEl;
+  const target = field === 'status' ? sEl : (field === 'memo' && mEl) ? mEl : tEl;
   target.focus();
-  target.setSelectionRange(target.value.length, target.value.length);
+  if (target === sEl) { try { sEl.showPicker(); } catch (e) { /* 목록은 직접 열면 됩니다 */ } }
+  else target.setSelectionRange(target.value.length, target.value.length);
 }
 function applyInlineEdit(box, id) {
   const n = node(id); if (!n) return;
   const t = box.querySelector('.ie-title').value.trim();
-  const mEl = box.querySelector('.ie-memo');
+  const mEl = box.querySelector('.ie-memo'), st = box.querySelector('.ie-status').value;
   if (t !== (n.title || '')) { n.title = t; save(`node:${id}:title`); }
   if (mEl && mEl.value !== (n.memo || '')) { n.memo = mEl.value; save(`node:${id}:memo`); }
+  if (NODE_STATUSES[st] && st !== n.status) { n.status = st; save(`node:${id}:status`); }
   render(); renderPanel();
 }
 // 노드를 두 번 누르면 편집창을 엽니다. 첫 클릭으로 화면이 다시 그려져 dblclick 이벤트가 나오지 않으므로 mousedown의 클릭 횟수(detail)로 판정합니다
@@ -1408,10 +1594,10 @@ svg.addEventListener('mousedown', e => {
   if (e.button !== 0 || e.detail !== 2 || e.shiftKey || pendingConnectionSource) return;
   const id = nodeIdAt(e.clientX, e.clientY);
   if (!id) return;
-  const nd = node(id), py = svgPoint(e).y - (nd ? nd.y : 0);
-  const focusMemo = py >= inlineEditorLayout().memoTop;   // 메모 자리를 눌렀으면 메모 칸으로
+  const nd = node(id), pt = svgPoint(e);
+  const field = inlineEditorField(pt.x - (nd ? nd.x : 0), pt.y - (nd ? nd.y : 0));   // 누른 자리에 따라 제목·메모·진행 상태 칸으로
   // 마우스 기본 동작이 끝난 뒤에 열어야 포커스가 빠지지 않습니다
-  setTimeout(() => openInlineEditor(id, focusMemo), 0);
+  setTimeout(() => openInlineEditor(id, field), 0);
 });
 
 // 드래그 중인 노드가 화면 가장자리에 닿으면 스크롤해서 계속 보이게 합니다
@@ -1481,7 +1667,7 @@ $('#s_canvasPadding').addEventListener('input', e => {
   save(); render();
 });
 $('#btnSettingsDefault').onclick = () => { S.settings = {...DEFAULT_SETTINGS}; save(); render(); renderSettings(); };
-$('#statusFilter').addEventListener('change', e => { statusFilter = e.target.value; render(); });
+$('#statusFilter').addEventListener('change', e => { statusFilter = e.target.value; render(); if (!$('#searchResults').hidden) renderSearchResults(); });
 $('#compactView').addEventListener('change', e => { compactView = e.target.checked; render(); fitView(); });
 // 하단 패널(폰 화면): 체크를 해제하면 제목 줄만 남기고 최소화, 다시 체크하면 원래 크기로 돌아갑니다.
 $('#panelExpand').addEventListener('change', e => $('aside').classList.toggle('minimized', !e.target.checked));
@@ -1688,11 +1874,22 @@ $('#btnPickProject').onclick = async () => {
 };
 $('#btnPickClose').onclick = () => $('#pickDlg').close();
 
-// 편집기 탭이 열려 있음을 서버에 알립니다. 탭을 닫으면 신호가 끊기고, 서버와 실행 창이 자동으로 꺼집니다.
+// 편집기 탭이 열려 있는 동안 서버와 연결을 계속 열어 둡니다. 탭을 닫으면 연결이 끊기고, 몇 초 뒤 서버가 자동으로 꺼집니다.
+// 연결이 끊기면(서버 재시작 등) 1초 뒤 다시 잇습니다.
 if (location.protocol === 'http:') {
-  const beat = () => fetch('/api/alive', {method: 'POST', keepalive: true}).catch(() => {});
-  beat();
-  setInterval(beat, 10000);
+  (async function keepAlive() {
+    let wait = 1000;
+    for (;;) {
+      try {
+        const res = await fetch('/api/alive-stream', {cache: 'no-store'});
+        wait = 1000;   // 연결되면 간격을 처음으로 되돌립니다
+        const reader = res.body.getReader();
+        while (!(await reader.read()).done) { /* 서버가 보내는 주기 신호만 받습니다 */ }
+      } catch (e) { /* 아래에서 다시 잇습니다 */ }
+      await new Promise(r => setTimeout(r, wait));
+      wait = Math.min(wait * 2, 10000);
+    }
+  })();
 }
 $('#btnHelp').onclick = () => $('#helpDlg').showModal();
 $('#btnHelpClose').onclick = () => $('#helpDlg').close();
@@ -1716,7 +1913,7 @@ $('#btnReset').onclick = async () => {
   const keep = S.settings;
   S = initial(); S.settings = keep;
   await applyGraph(S);
-  setFstat('새 빈 그래프로 초기화했습니다.');
+  setFstat('모든 노드와 화살표를 지웠습니다.');
 };
 
 document.addEventListener('keydown', e => {
@@ -1731,11 +1928,10 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
 });
 /* ---------- 시작 ---------- */
+// 시작 화면: 빈 그래프에 브라우저에 보관된 설정(색·모양 등)만 먼저 입힙니다. 그래프는 노드 파일에서 읽어 채웁니다(loadSavedGraph).
 const browserData = load();
-S = browserData || initial();
-normalizeNodeStatuses();
-if (!S.nextId) S.nextId = 10;
-ensureSettings();
+S = {...initial(), settings: browserData?.settings || {}};
+prepareState();
 resetHistory();
 let sidebarHiddenAtLoad = false;
 try { sidebarHiddenAtLoad = localStorage.getItem(SIDEBAR_KEY) === '1'; } catch (e) {}

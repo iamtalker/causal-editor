@@ -7,11 +7,26 @@ const fs = require('fs');
 const path = require('path');
 const {spawn} = require('child_process');
 
+// 콘솔 출력을 server.log에도 남깁니다. 창 없이(숨김) 실행해도 상태와 오류를 볼 수 있고, 서버가 둘 동시에 써도 막히지 않도록 매번 덧붙여 씁니다.
+const LOG_FILE = path.join(__dirname, 'server.log');
+try { if (fs.statSync(LOG_FILE).size > 204800) fs.unlinkSync(LOG_FILE); } catch (e) {}   // 200KB가 넘으면 새로 시작
+const rawLog = console.log.bind(console);
+console.log = (...args) => {
+  rawLog(...args);
+  try { fs.appendFileSync(LOG_FILE, new Date().toLocaleString('sv-SE') + ' ' + args.join(' ') + '\n'); } catch (e) {}
+};
+process.on('uncaughtException', err => { console.log('오류로 종료합니다: ' + (err && err.stack || err)); process.exit(1); });
+
 const PORT = 8787;
-// 편집기 탭이 열려 있는 동안 10초마다 신호(alive)를 받습니다. 신호가 IDLE_MS 동안 없으면 탭이 닫힌 것으로 보고 서버를 끕니다.
-// 브라우저가 백그라운드 탭을 느리게 만들어도 끊기지 않도록 넉넉히 잡았습니다. (EDITOR_IDLE_MS는 시험용)
-const IDLE_MS = Number(process.env.EDITOR_IDLE_MS) || 90000;
-let lastSeen = Date.now() + IDLE_MS;   // 처음 페이지가 열릴 시간을 줍니다
+// 편집기 탭은 열려 있는 동안 /api/alive-stream 연결을 계속 열어 둡니다. 탭을 닫으면 이 연결이 바로 끊기고,
+// 연결이 하나도 없는 상태로 IDLE_MS(5초)가 지나면 서버를 끕니다. 연결 방식이라 브라우저가 백그라운드 탭의 타이머를 늦춰도 영향이 없습니다.
+// (EDITOR_IDLE_MS, EDITOR_GRACE_MS는 시험용)
+const IDLE_MS = Number(process.env.EDITOR_IDLE_MS) || 5000;
+// 서버를 막 켰거나 이미 켜진 서버에 다시 붙을 때는 브라우저가 페이지를 열 시간을 줍니다.
+const GRACE_MS = Number(process.env.EDITOR_GRACE_MS) || 30000;
+const graceTime = () => Date.now() + GRACE_MS - IDLE_MS;
+let lastSeen = graceTime();
+let openStreams = 0;
 const APP_DIR = __dirname;
 const ROOT = path.resolve(APP_DIR, '..');
 // 데이터 폴더: 설정 창에서 지정한 외부 폴더가 있으면 노드파일·변경이력을 그곳에 둡니다. 없으면 프로젝트 폴더입니다.
@@ -28,12 +43,22 @@ const NODE_DIR = path.join(DATA_DIR, '노드파일');
 // 그래프 JSON은 노드파일 폴더 밖의 '내부데이터'에 둡니다. 원본은 노드 Markdown 파일이고, 이 JSON은 설정과 백업용 사본입니다.
 const GRAPH_DIR = path.join(DATA_DIR, '내부데이터');
 const GRAPH_FILE = path.join(GRAPH_DIR, '그래프.json');
-const LEGACY_GRAPH_FILE = path.join(NODE_DIR, '그래프.json');   // 예전 위치 (읽어서 옮긴 뒤 지웁니다)
 const HISTORY_DIR = path.join(DATA_DIR, '변경이력');
 // 이 프로그램이 만든 파일 이름 패턴: n1_제목.md, n12_제목.md, _경로.md
 const OWN_FILE = /^(n\d+_.*|_경로)\.md$/;
 const HISTORY_FILE = /^\d{8}T\d{6}Z_[a-z0-9-]+\.json$/;
-const GRAPH_ID = /^[\p{L}\p{N}_-]{1,80}$/u;
+// 파일 쓰기: 내용이 같으면 쓰지 않고(클라우드 동기화가 안 바뀐 파일을 다시 올리지 않게), 쓸 때는 임시 파일에 쓴 뒤 바꿔치기해서
+// 중간에 끊겨도 파일이 반쯤 쓰인 채 남지 않게 합니다. 바꿔치기가 막히면(동기화 프로그램이 파일을 잡고 있을 때 등) 직접 씁니다.
+function writeFileAtomic(file, text) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  try { fs.writeFileSync(tmp, text, 'utf8'); fs.renameSync(tmp, file); }
+  catch (err) { try { fs.unlinkSync(tmp); } catch (e) { /* 없으면 그대로 */ } fs.writeFileSync(file, text, 'utf8'); }
+}
+function writeIfChanged(file, text) {
+  try { if (fs.readFileSync(file, 'utf8') === text) return false; } catch (err) { /* 없으면 새로 씁니다 */ }
+  writeFileAtomic(file, text);
+  return true;
+}
 const sendJson = (res, status, value) => { res.writeHead(status, {'Content-Type': 'application/json; charset=utf-8'}); res.end(JSON.stringify(value)); };
 function readBody(req, maxBytes = 20 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
@@ -69,33 +94,11 @@ const server = http.createServer((req, res) => {
     } catch (err) { return sendJson(res, 500, {ok: false, error: err.message}); }
   }
 
-  if (req.method === 'GET' && (req.url === '/api/graph' || req.url.startsWith('/api/graph?'))) {
+  // 설정과 백업을 담은 보조 그래프 JSON. 없으면 data가 null입니다.
+  if (req.method === 'GET' && req.url.split('?')[0] === '/api/graph') {
     try {
-      if (fs.existsSync(GRAPH_FILE)) {
-        return sendJson(res, 200, {ok: true, source: 'internal', data: JSON.parse(fs.readFileSync(GRAPH_FILE, 'utf8'))});
-      }
-      if (fs.existsSync(LEGACY_GRAPH_FILE)) {
-        const data = JSON.parse(fs.readFileSync(LEGACY_GRAPH_FILE, 'utf8'));
-        return sendJson(res, 200, {ok: true, source: 'legacy', data});
-      }
-      const legacyId = new URL(req.url, 'http://localhost').searchParams.get('legacy') || '';
-      let legacyFile = '';
-      if (GRAPH_ID.test(legacyId)) {
-        const candidate = path.join(NODE_DIR, legacyId, `${legacyId}.json`);
-        if (fs.existsSync(candidate)) legacyFile = candidate;
-      }
-      if (!legacyFile) {
-        const candidates = fs.readdirSync(NODE_DIR, {withFileTypes: true})
-          .filter(entry => entry.isDirectory() && GRAPH_ID.test(entry.name))
-          .map(entry => path.join(NODE_DIR, entry.name, `${entry.name}.json`))
-          .filter(file => fs.existsSync(file))
-          .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-        legacyFile = candidates[0] || '';
-      }
-      if (!legacyFile) return sendJson(res, 200, {ok: true, data: null});
-      const data = JSON.parse(fs.readFileSync(legacyFile, 'utf8'));
-      if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) throw new Error('기존 그래프 파일이 올바르지 않습니다.');
-      return sendJson(res, 200, {ok: true, source: 'legacy', data});
+      const data = fs.existsSync(GRAPH_FILE) ? JSON.parse(fs.readFileSync(GRAPH_FILE, 'utf8')) : null;
+      return sendJson(res, 200, {ok: true, data});
     } catch (err) { return sendJson(res, 500, {ok: false, error: err.message}); }
   }
 
@@ -104,25 +107,12 @@ const server = http.createServer((req, res) => {
       const data = JSON.parse(body);
       if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) throw new Error('잘못된 그래프 데이터입니다.');
       fs.mkdirSync(GRAPH_DIR, {recursive: true});
-      fs.writeFileSync(GRAPH_FILE, JSON.stringify(data, null, 2), 'utf8');
-      // 예전 위치의 그래프 JSON은 내부데이터로 옮겨졌으므로 노드파일 폴더에서 지웁니다
-      if (fs.existsSync(LEGACY_GRAPH_FILE)) fs.unlinkSync(LEGACY_GRAPH_FILE);
-      const legacyDirs = fs.readdirSync(NODE_DIR, {withFileTypes: true})
-        .filter(entry => entry.isDirectory() && GRAPH_ID.test(entry.name) && fs.existsSync(path.join(NODE_DIR, entry.name, `${entry.name}.json`)));
-      if (legacyDirs.length) {
-        const archiveDir = path.join(HISTORY_DIR, '이전_그래프');
-        fs.mkdirSync(archiveDir, {recursive: true});
-        for (const entry of legacyDirs) {
-          const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-          let dest = path.join(archiveDir, `${entry.name}_${stamp}`), suffix = 2;
-          while (fs.existsSync(dest)) dest = path.join(archiveDir, `${entry.name}_${stamp}_${suffix++}`);
-          fs.renameSync(path.join(NODE_DIR, entry.name), dest);
-        }
-      }
+      writeIfChanged(GRAPH_FILE, JSON.stringify(data, null, 2));
       sendJson(res, 200, {ok: true});
     }).catch(err => sendJson(res, 400, {ok: false, error: err.message}));
     return;
   }
+
   if (req.method === 'GET' && req.url === '/api/versions') {
     try {
       fs.mkdirSync(HISTORY_DIR, {recursive: true});
@@ -139,7 +129,7 @@ const server = http.createServer((req, res) => {
       const id = `${new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')}_${Math.random().toString(36).slice(2, 8)}`;
       const saved = {id, at: new Date().toISOString(), summary: item.summary.slice(0, 160), data: item.data};
       fs.mkdirSync(HISTORY_DIR, {recursive: true});
-      fs.writeFileSync(path.join(HISTORY_DIR, `${id}.json`), JSON.stringify(saved, null, 2), 'utf8');
+      writeFileAtomic(path.join(HISTORY_DIR, `${id}.json`), JSON.stringify(saved, null, 2));
       sendJson(res, 200, {ok: true, version: saved});
     }).catch(err => sendJson(res, 400, {ok: false, error: err.message}));
     return;
@@ -168,10 +158,11 @@ const server = http.createServer((req, res) => {
         fs.mkdirSync(NODE_DIR, {recursive: true});
 
         const written = new Set();
+        let changed = 0;
         for (const f of files) {
           const name = path.basename(String(f.name));   // 폴더 밖으로 나가지 못하게 경로 제거
           if (!OWN_FILE.test(name)) continue;
-          fs.writeFileSync(path.join(NODE_DIR, name), String(f.text), 'utf8');
+          if (writeIfChanged(path.join(NODE_DIR, name), String(f.text))) changed++;
           written.add(name);
         }
 
@@ -181,7 +172,7 @@ const server = http.createServer((req, res) => {
         }
 
         res.writeHead(200, {'Content-Type': 'application/json; charset=utf-8'});
-        res.end(JSON.stringify({ok: true, count: written.size}));
+        res.end(JSON.stringify({ok: true, count: written.size, changed}));
       } catch (err) {
         res.writeHead(400, {'Content-Type': 'application/json; charset=utf-8'});
         res.end(JSON.stringify({ok: false, error: err.message}));
@@ -257,9 +248,24 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 편집기 탭이 살아 있다는 신호
-  if (req.method === 'POST' && req.url === '/api/alive') {
-    lastSeen = Date.now();
+  // 편집기 탭이 열려 있는 동안 계속 열어 두는 연결. 끊기면(탭 닫힘) 종료 타이머가 시작됩니다.
+  if (req.method === 'GET' && req.url === '/api/alive-stream') {
+    res.writeHead(200, {'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', 'Connection': 'keep-alive'});
+    res.write(': connected\n\n');
+    openStreams++;
+    const ping = setInterval(() => res.write(': ping\n\n'), 3000);   // 끊어진 연결을 빨리 알아채기 위한 주기적 쓰기
+    let closed = false;
+    const done = () => {
+      if (closed) return;
+      closed = true; clearInterval(ping); openStreams = Math.max(0, openStreams - 1); lastSeen = Date.now();
+    };
+    req.on('close', done); res.on('close', done); res.on('error', done);
+    return;
+  }
+
+  // 예전 방식의 살아 있다는 신호(이미 열려 있던 옛 탭용), 그리고 이미 켜진 서버에 다시 붙을 때의 연장 요청(?grace=1)
+  if (req.method === 'POST' && (req.url === '/api/alive' || req.url === '/api/alive?grace=1')) {
+    lastSeen = req.url === '/api/alive' ? Date.now() : Math.max(lastSeen, graceTime());
     return sendJson(res, 200, {ok: true});
   }
 
@@ -307,14 +313,14 @@ function openBrowser() {
 }
 
 // 이미 실행 중인 편집기가 있으면 새 서버를 또 띄우지 않습니다.
-// 기존 서버의 종료 타이머를 먼저 처음부터 다시 시작시킨 뒤 브라우저를 엽니다. (탭을 닫고 곧 종료되려던 서버에 붙는 일을 막기 위해)
+// 기존 서버의 종료 타이머를 먼저 연장시킨 뒤 브라우저를 엽니다. (탭을 닫고 곧 종료되려던 서버에 붙는 일을 막기 위해)
 function portBusy() {
   console.log('포트 ' + PORT + '을(를) 다른 프로그램이 쓰고 있습니다. 그 프로그램을 끈 뒤 다시 실행하세요.');
   process.exit(1);
 }
 server.on('error', err => {
   if (err.code !== 'EADDRINUSE') throw err;
-  const req = http.request({host: '127.0.0.1', port: PORT, path: '/api/alive', method: 'POST', timeout: 3000}, res => {
+  const req = http.request({host: '127.0.0.1', port: PORT, path: '/api/alive?grace=1', method: 'POST', timeout: 3000}, res => {
     let body = '';
     res.on('data', c => body += c);
     res.on('end', () => {
@@ -336,11 +342,11 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`인과 편집기 실행 중: http://localhost:${PORT}`);
   console.log('편집기 탭을 닫으면 잠시 뒤 이 창도 자동으로 꺼집니다.');
   setInterval(() => {
-    if (Date.now() - lastSeen > IDLE_MS) {
+    if (openStreams === 0 && Date.now() - lastSeen > IDLE_MS) {
       console.log('편집기 탭이 닫혀 서버를 끕니다.');
       process.exit(0);
     }
-  }, 5000);
+  }, 1000);
   console.log(`프로그램 폴더: ${APP_DIR}`);
   console.log(`노드 파일 폴더: ${NODE_DIR}`);
   console.log(`변경 이력 폴더: ${HISTORY_DIR}`);

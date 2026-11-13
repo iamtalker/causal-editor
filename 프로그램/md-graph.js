@@ -9,12 +9,12 @@
 //   y: 340
 //   status: in_progress
 //   ---
-//   # 제목 (시작)  제목 줄. 시작/목표 표시는 화살표에서 자동으로 정해지므로 읽을 때는 버립니다.
+//   # 제목  제목 줄. 시작/종료는 진행 상태(시작·종료)로 정합니다. 예전 파일의 제목 뒤 (시작)/(목표) 표시는 읽을 때 버립니다.
 //   ## 진행 상태 / ## 메모 / ## 원인 / ## 결과
 //   결과 목록: - [다음 노드 제목](다음파일.md)  ·  메모가 있으면 "  - 메모: ..." (여러 줄이면 다음 줄을 4칸 들여씀)
 const NodeMd = (function () {
   const STATUS_LABEL = {
-    not_started: '미착수', in_progress: '진행 중', completed: '완료', stopped: '중단', failed: '실패'
+    start: '시작', not_started: '미착수', in_progress: '진행 중', completed: '완료', stopped: '중단', failed: '실패', end: '종료'
   };
   const STATUS_KEY = Object.fromEntries(Object.entries(STATUS_LABEL).map(([k, v]) => [v, k]));
   const OWN_NODE_FILE = /^n\d+_.*\.md$/;          // 노드 파일 이름 (_경로.md는 제외)
@@ -22,13 +22,6 @@ const NodeMd = (function () {
   const DEFAULT_TITLE = '노드';
 
   const fileName = n => `n${String(n.id).replace(/^n/, '').padStart(4, '0')}_${(n.title || DEFAULT_TITLE).replace(/[\\/:*?"<>|\s]+/g, '_')}.md`;
-
-  function roleOf(id, edges) {
-    const hasIn = edges.some(e => e.to === id), hasOut = edges.some(e => e.from === id);
-    if (hasOut && !hasIn) return 'start';
-    if (hasIn && !hasOut) return 'goal';
-    return 'normal';
-  }
 
   function trimBlankLines(lines) {
     let a = 0, b = lines.length;
@@ -40,13 +33,11 @@ const NodeMd = (function () {
   // 노드 하나를 Markdown 문자열로 만듭니다. graph = {nodes, edges}
   function toNodeMd(n, graph) {
     const byId = new Map(graph.nodes.map(x => [x.id, x]));
-    const role = roleOf(n.id, graph.edges);
-    const kind = role === 'start' ? ' (시작)' : role === 'goal' ? ' (목표)' : '';
     const status = STATUS_LABEL[n.status] ? n.status : 'not_started';
     const x = Math.round(Number(n.x)) || 0, y = Math.round(Number(n.y)) || 0;
     const L = [
       '---', `id: ${n.id}`, `x: ${x}`, `y: ${y}`, `status: ${status}`, '---', '',
-      `# ${n.title || DEFAULT_TITLE}${kind}`, '',
+      `# ${n.title || DEFAULT_TITLE}`, '',
       '## 진행 상태', '', STATUS_LABEL[status], ''
     ];
     if (n.memo) L.push('## 메모', '', n.memo, '');
