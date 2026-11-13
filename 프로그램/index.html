@@ -874,6 +874,13 @@ function searchNodes(query) {
   if (!q) return [];
   return S.nodes.filter(n => statusMatches(n) && `${n.title || ''}\n${n.memo || ''}`.toLocaleLowerCase().includes(q));
 }
+// 검색 목록을 보여 줍니다. 검색창이 화면 오른쪽에 있어도 목록이 화면 밖으로 넘치지 않게 왼쪽으로 당깁니다.
+function showSearchBox(box) {
+  box.hidden = false;
+  box.style.left = '0px';
+  const over = box.getBoundingClientRect().right - (window.innerWidth - 8);
+  if (over > 0) box.style.left = `-${over}px`;
+}
 // 화살표(들어오는 + 나가는)가 많은 순서의 노드 목록. 연결이 없는 노드는 뺍니다.
 // 옵션: listAll=true이면 연결 없는 노드도 맨 끝에 넣고, byStatus=true이면 상태 보기에서 고른 상태의 노드만 남깁니다.
 function rankedNodes({listAll = false, byStatus = false} = {}) {
@@ -897,7 +904,7 @@ function renderRankedNodes(box) {
   if (!rows.length) {
     if (!filtered) { box.hidden = true; return; }
     const empty = document.createElement('div'); empty.textContent = '이 상태의 노드가 없습니다.';
-    empty.style.cssText = 'padding:10px;color:var(--muted);font-size:13px'; box.appendChild(empty); box.hidden = false; return;
+    empty.style.cssText = 'padding:10px;color:var(--muted);font-size:13px'; box.appendChild(empty); showSearchBox(box); return;
   }
   const head = document.createElement('div');
   head.textContent = filtered ? `${NODE_STATUSES[statusFilter].label} 노드 · 연결이 많은 순서` : '연결이 많은 순서';
@@ -910,7 +917,7 @@ function renderRankedNodes(box) {
     box.appendChild(b);
   }
   if (rows.length > 50) { const more = document.createElement('div'); more.textContent = `외 ${rows.length - 50}개`; more.style.cssText = 'padding:8px;color:var(--muted);font-size:12px'; box.appendChild(more); }
-  box.hidden = false;
+  showSearchBox(box);
 }
 function renderSearchResults() {
   const input = $('#nodeSearch'), box = $('#searchResults'), q = input.value.trim();
@@ -928,7 +935,7 @@ function renderSearchResults() {
     }
     if (matches.length > 50) { const more = document.createElement('div'); more.textContent = `외 ${matches.length - 50}개 결과`; more.style.cssText = 'padding:8px;color:#667085;font-size:12px'; box.appendChild(more); }
   }
-  box.hidden = false;
+  showSearchBox(box);
 }
 function goToSearchResult(id) {
   if (focusMode) toggleFocusMode();
