@@ -5,6 +5,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const {spawn} = require('child_process');
 
 const PORT = 8787;
 // 편집기 탭이 열려 있는 동안 10초마다 신호(alive)를 받습니다. 신호가 IDLE_MS 동안 없으면 탭이 닫힌 것으로 보고 서버를 끕니다.
@@ -294,6 +295,42 @@ const server = http.createServer((req, res) => {
   res.end('Not found');
 });
 
+// 편집기 주소를 기본 브라우저로 엽니다. 서버가 준비된 뒤에만 부르므로, 서버가 없는 빈 페이지가 뜨는 일이 없습니다. (EDITOR_NO_OPEN=1이면 열지 않음: 시험용)
+function openBrowser() {
+  if (process.env.EDITOR_NO_OPEN) return;
+  const url = `http://localhost:${PORT}`;
+  try {
+    const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
+      : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+    spawn(cmd, args, {detached: true, stdio: 'ignore', windowsHide: true}).unref();
+  } catch (e) { console.log('브라우저를 자동으로 열지 못했습니다. 직접 ' + url + ' 을 여세요.'); }
+}
+
+// 이미 실행 중인 편집기가 있으면 새 서버를 또 띄우지 않습니다.
+// 기존 서버의 종료 타이머를 먼저 처음부터 다시 시작시킨 뒤 브라우저를 엽니다. (탭을 닫고 곧 종료되려던 서버에 붙는 일을 막기 위해)
+function portBusy() {
+  console.log('포트 ' + PORT + '을(를) 다른 프로그램이 쓰고 있습니다. 그 프로그램을 끈 뒤 다시 실행하세요.');
+  process.exit(1);
+}
+server.on('error', err => {
+  if (err.code !== 'EADDRINUSE') throw err;
+  const req = http.request({host: '127.0.0.1', port: PORT, path: '/api/alive', method: 'POST', timeout: 3000}, res => {
+    let body = '';
+    res.on('data', c => body += c);
+    res.on('end', () => {
+      let ok = false;
+      try { ok = JSON.parse(body).ok === true; } catch (e) {}
+      if (!ok) portBusy();
+      console.log('이미 실행 중인 편집기에 연결합니다.');
+      openBrowser();
+      setTimeout(() => process.exit(0), 500);
+    });
+  });
+  req.on('timeout', () => req.destroy(new Error('timeout')));
+  req.on('error', portBusy);
+  req.end();
+});
+
 // 이 PC에서만 접속 가능하도록 127.0.0.1에만 엽니다.
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`인과 편집기 실행 중: http://localhost:${PORT}`);
@@ -308,4 +345,5 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`노드 파일 폴더: ${NODE_DIR}`);
   console.log(`변경 이력 폴더: ${HISTORY_DIR}`);
   console.log('이 창을 닫으면 편집기가 종료됩니다 (저장된 내용은 유지됩니다).');
+  openBrowser();
 });
