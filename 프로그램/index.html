@@ -37,9 +37,12 @@
   button:disabled{opacity:.4;cursor:not-allowed}
   .btn input{display:none}
   main{flex:1;display:flex;min-height:0}
-  #stage{flex:1;overflow:auto;background:#fafafa;scrollbar-color:#aab2bd #edf0f4;cursor:grab}
+  #stage{flex:1;overflow:auto;position:relative;background:#fafafa;scrollbar-color:#aab2bd #edf0f4;cursor:grab}
   #canvas{display:block;margin-inline:auto}
   #stage.is-panning{cursor:grabbing;user-select:none}
+  .inline-editor{position:absolute;z-index:5;box-sizing:border-box;border-radius:10px;overflow:hidden;cursor:text}
+  .inline-editor textarea{position:absolute;box-sizing:border-box;margin:0;padding:2px 4px;border:1px solid transparent;border-radius:4px;background:transparent;color:#222;font-family:inherit;line-height:1.3;resize:none;overflow:hidden;outline:none}
+  .inline-editor textarea:focus{background:#fff;border-color:#2563eb}
   #canvasMenu{position:fixed;z-index:30;min-width:190px;padding:5px;border:1px solid #d4d9e1;border-radius:9px;background:#fff;box-shadow:0 8px 24px #18223026}
   #canvasMenu[hidden]{display:none}
   #canvasMenu button{display:block;width:100%;padding:8px 10px;border:0;text-align:left;background:transparent}
@@ -49,6 +52,10 @@
   #tip{position:sticky;top:0;z-index:1;background:#fffbe6;border-bottom:1px solid #f0e0a0;padding:6px 12px;font-size:13px;color:#554}
   aside{width:300px;flex:0 0 300px;border-left:1px solid #e1e5eb;background:#fff;padding:18px 16px;overflow:auto;box-sizing:border-box;display:flex;flex-direction:column}
   aside[hidden]{display:none}
+  #sidebarResizer{flex:0 0 6px;cursor:col-resize;touch-action:none;background:#f3f5f8;border-left:1px solid #e1e5eb;user-select:none}
+  #sidebarResizer:hover,#sidebarResizer.dragging{background:#c9d3e0}
+  #sidebarResizer[hidden]{display:none}
+  @media (max-width:800px){#sidebarResizer{display:none}}
   #help{color:#667085;font-size:13px;line-height:1.75}
   aside label{display:block;font-size:12px;color:#555;margin-top:10px}
   aside input,aside textarea,aside select{width:100%;box-sizing:border-box;padding:6px;border:1px solid #ccc;border-radius:6px;font:inherit;margin-top:3px}
@@ -95,6 +102,7 @@
 </header>
 <main>
   <div id="stage"><div id="tip"></div><svg id="canvas" width="2400" height="1600"></svg></div>
+  <div id="sidebarResizer" role="separator" aria-orientation="vertical" title="드래그해서 사이드바 넓이를 조절합니다"></div>
   <aside>
     <label class="panel-toggle"><input type="checkbox" id="panelExpand" checked> 패널 펼치기</label>
     <div id="help" class="hint">
@@ -141,7 +149,7 @@
     <li>노드를 선택해 진행 상태(미착수·진행 중·완료·중단·실패)와 메모를 편집합니다. 상태와 자동 역할에 따라 표시가 달라집니다</li>
     <li>포커스 모드: 버튼을 누른 뒤 시작 노드를 선택하면 화살표 방향으로 이어지는 경로를 표시합니다. 선택 노드로 들어오는 화살표는 경로에 포함하지 않으며, 포커스 중 다른 노드를 선택해도 경로는 고정됩니다. 새로 만든 노드와 그 연결 화살표는 포커스 종료 전까지 계속 표시되어 편집·삭제할 수 있습니다</li>
     <li>상태 보기: 툴바에서 상태를 고르면 그 상태의 노드는 진하게, 나머지 노드와 화살표는 흐리게 표시합니다. 파일에는 저장되지 않는 화면 설정입니다</li>
-    <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양, 선택 강조 색을 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
+    <li>설정: 노드 모양, 노드 색, 배경 색, 연결선 모양, 화살촉 크기, 줄 굵기를 바꾸고, JSON 저장·불러오기도 여기서 합니다</li>
   </ul>
   <button id="btnHelpClose">닫기</button>
 </dialog>
@@ -169,9 +177,14 @@
   <label>연결선 모양
     <select id="s_lineStyle"><option value="curve">곡선</option><option value="straight">직선</option></select>
   </label>
-  <div class="cset"><span class="cl">선택 강조 색 (현재 선택한 노드 테두리)</span>
-    <div class="crow"><input type="text" id="s_selectionColor" maxlength="7" placeholder="#000000"><span class="sw" id="sw_selectionColor"></span></div>
-    <div class="presets" id="p_selectionColor"></div></div>
+  <label>화살촉 크기 (px)
+    <input type="number" id="s_arrowSize" min="4" max="60" step="1">
+  </label>
+  <label>줄 굵기 (px)
+    <input type="number" id="s_lineWidth" min="0.5" max="10" step="0.5">
+  </label>
+  <label style="display:flex;align-items:center;gap:6px;margin-top:10px"><input type="checkbox" id="s_allowMutualEdges"> A↔B 양방향 연결 허용</label>
+  <div class="muted">끄면 A에서 B로 연결된 상태에서 B에서 A로의 화살표 연결을 막습니다. 켜면 서로 연결되는 화살표를 만들 수 있지만 선이 복잡해집니다.</div>
   <label>캔버스 바깥 여백 (px)
     <input type="number" id="s_canvasPadding" min="0" max="1000" step="20">
   </label>
@@ -207,7 +220,8 @@ const KEY = 'causal-editor-v3';
 const VERSION_KEY = 'causal-editor-versions-v1';
 const SIDEBAR_KEY = 'causal-editor-sidebar-hidden-v1';
 const RECT = {w: 200, h: 110}, CIRCLE = {w: 130, h: 130};
-const DEFAULT_SETTINGS = {shape:'rect', nodeColor:'#ffffff', bgColor:'#fafafa', lineStyle:'curve', selectionColor:'#000000', canvasPadding:120};
+const DEFAULT_SETTINGS = {shape:'rect', nodeColor:'#ffffff', bgColor:'#fafafa', lineStyle:'curve', arrowSize:14, lineWidth:1, allowMutualEdges:false, canvasPadding:400};
+const NUMBER_CTRL = [['s_arrowSize','arrowSize',4,60],['s_lineWidth','lineWidth',0.5,10]];
 const NODE_FIELDS = [['f_title','title'],['f_memo','memo']];
 const NODE_STATUSES = {
   not_started: {label:'미착수', color:'#94a3b8'},
@@ -218,11 +232,10 @@ const NODE_STATUSES = {
 };
 const EDGE_FIELDS = [['e_memo','memo']];
 const SELECT_CTRL = [['s_shape','shape'],['s_lineStyle','lineStyle']];
-const COLOR_CTRL = ['nodeColor','bgColor','selectionColor'];   // 네이티브 색상 창 대신 입력칸 + 색 견본 방식
+const COLOR_CTRL = ['nodeColor','bgColor'];   // 네이티브 색상 창 대신 입력칸 + 색 견본 방식
 const PRESETS = {
   nodeColor: ['#ffffff','#f8fafc','#fef9c3','#dcfce7','#dbeafe','#fce7f3'],
-  bgColor: ['#fafafa','#f4f5f7','#f5f0e6','#ffffff','#1e293b','#0f172a'],
-  selectionColor: ['#000000','#111827','#475569','#7c3aed','#0891b2','#dc2626']
+  bgColor: ['#fafafa','#f4f5f7','#f5f0e6','#ffffff','#1e293b','#0f172a']
 };
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -265,7 +278,7 @@ let VERSION_LIST = [];
 function initial() {
   return {nextId: 1, nodes: [], edges: [], settings: {...DEFAULT_SETTINGS}};
 }
-function ensureSettings() { S.settings = Object.assign({}, DEFAULT_SETTINGS, S.settings || {}); if (!S.settings.selectionColor || S.settings.selectionColor === '#ea580c') S.settings.selectionColor = '#000000'; delete S.settings.highlightColor; delete S.settings.lineColor; }
+function ensureSettings() { S.settings = Object.assign({}, DEFAULT_SETTINGS, S.settings || {}); delete S.settings.selectionColor; delete S.settings.highlightColor; delete S.settings.lineColor; }
 function load() { try { const v = localStorage.getItem(KEY); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
 function snapshotGraph() { return JSON.stringify(S); }
 function updateHistoryButtons() {
@@ -583,12 +596,14 @@ function visibleSets() {
 }
 
 function render() {
-  const g = analyze(), st = S.settings, D = dims(), W = D.w, H = D.h, selectionColor = st.selectionColor;
+  const g = analyze(), st = S.settings, D = dims(), W = D.w, H = D.h;
   if (focusNodeId && !node(focusNodeId)) focusNodeId = null;
   const {visibleNodeIds, visibleEdgeIds, focusPathEdgeIds} = visibleSets();
   $('#stage').style.background = st.bgColor;
   const markerColors = new Set(Object.values(NODE_STATUSES).map(status => status.color));
-  let h = `<defs>${[...markerColors].map(color => `<marker id="arr-${color.slice(1)}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="${color}"/></marker>`).join('')}<marker id="arr-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#000000"/></marker></defs>`;
+  const arrowPx = Math.max(4, Number(st.arrowSize) || 14), linePx = Math.max(0.5, Number(st.lineWidth) || 1);
+  const markerAttrs = `viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="${arrowPx}" markerHeight="${arrowPx}" orient="auto-start-reverse"`;
+  let h = `<defs>${[...markerColors].map(color => `<marker id="arr-${color.slice(1)}" ${markerAttrs}><path d="M0,0L10,5L0,10z" fill="${color}"/></marker>`).join('')}</defs>`;
 
   const focusOffsets = new Map();
   if (focusMode && focusNodeId) {
@@ -628,11 +643,10 @@ function render() {
     const bStatus = NODE_STATUSES[b.status] || NODE_STATUSES.not_started;
     const sameStatus = a.status === b.status;
     const color = sameStatus ? aStatus.color : bStatus.color;
-    const isFocusedEdge = focusMode && focusPathEdgeIds.has(e.id);
-    const stroke = isFocusedEdge ? '#000000' : sameStatus ? color : `url(#grad-${esc(e.id)})`;
-    const w = (isFocusedEdge ? 3 : a.status === 'completed' && b.status === 'completed' ? 3 : 1) + (sel.type === 'edge' && sel.id === e.id ? 2 : 0);
+    const stroke = sameStatus ? color : `url(#grad-${esc(e.id)})`;
+    const w = linePx;
     if (!sameStatus) h += `<defs><linearGradient id="grad-${esc(e.id)}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0%" stop-color="${aStatus.color}"/><stop offset="50%" stop-color="${aStatus.color}"/><stop offset="50%" stop-color="${bStatus.color}"/><stop offset="100%" stop-color="${bStatus.color}"/></linearGradient></defs>`;
-    h += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${w}" marker-end="${isFocusedEdge ? 'url(#arr-focus)' : `url(#arr-${color.slice(1)})`}"/>`;
+    h += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${w}" marker-end="url(#arr-${color.slice(1)})"/>`;
     const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 8;
     const edgeMemoSummary = e.memo ? titleLines(e.memo, 14, 1)[0] : '';
     if (edgeMemoSummary && !compactView) h += `<text x="${mx}" y="${my}" font-size="11" fill="#222" text-anchor="middle" paint-order="stroke" stroke="${st.bgColor}" stroke-width="4" pointer-events="none"><title>${esc(e.memo)}</title>${esc(edgeMemoSummary)}</text>`;
@@ -645,7 +659,7 @@ function render() {
     const kind = nodeKind(n);
     const fill = kind === 'start' ? '#ecfdf5' : kind === 'goal' ? '#fef2f2' : st.nodeColor;
     const status = NODE_STATUSES[n.status] || NODE_STATUSES.not_started;
-    const stroke = isSel ? selectionColor : status.color;
+    const stroke = isSel ? '#000000' : status.color;
     const sw = isSel ? 4 : 3;
     let body;
     const titleRows = titleLines(n.title, st.shape === 'circle' ? 8 : 12);
@@ -672,6 +686,8 @@ function render() {
   const padding = Math.max(0, Math.min(1000, Number(st.canvasPadding) || 0));
   const minNodeX = Math.min(0, ...S.nodes.map(n => n.x)), minNodeY = Math.min(0, ...S.nodes.map(n => n.y));
   const maxNodeX = Math.max(800, ...S.nodes.map(n => n.x + W + 40)), maxNodeY = Math.max(600, ...S.nodes.map(n => n.y + H + 40));
+  const hadView = !!svg.getAttribute('viewBox');
+  const prevMinX = viewMinX, prevMinY = viewMinY;
   viewMinX = minNodeX - padding; viewMinY = minNodeY - padding;
   lastCW = Math.max(800, maxNodeX - minNodeX + padding * 2);
   lastCH = Math.max(600, maxNodeY - minNodeY + padding * 2);
@@ -679,6 +695,12 @@ function render() {
   svg.setAttribute('width', lastCW * zoom);
   svg.setAttribute('height', lastCH * zoom);
   svg.innerHTML = h;
+  // 왼쪽·위로 캔버스가 넓어지면 화면에 보이던 내용이 밀리지 않도록 스크롤 위치를 보정합니다
+  if (hadView) {
+    const stageEl = $('#stage');
+    stageEl.scrollLeft += (prevMinX - viewMinX) * zoom;
+    stageEl.scrollTop += (prevMinY - viewMinY) * zoom;
+  }
 
   // 화면 상단 안내: 노드가 하나도 없을 때만 표시
   const tip = $('#tip');
@@ -705,12 +727,59 @@ function renderPanel() {
 
 function setSidebarVisible(visible, persist = false) {
   $('aside').hidden = !visible;
+  $('#sidebarResizer').hidden = !visible;
   $('#btnSidebar').textContent = visible ? '사이드바 숨기기' : '사이드바 보이기';
   $('#btnSidebar').setAttribute('aria-pressed', String(visible));
   if (persist) {
     try { localStorage.setItem(SIDEBAR_KEY, visible ? '0' : '1'); } catch (e) {}
   }
 }
+
+const SIDEBAR_WIDTH_KEY = 'causal-editor-sidebar-width-v1';
+const SIDEBAR_MIN_WIDTH = 200;
+function clampSidebarWidth(w) {
+  const max = Math.max(SIDEBAR_MIN_WIDTH, Math.floor(window.innerWidth * 0.6));
+  return Math.min(max, Math.max(SIDEBAR_MIN_WIDTH, Math.round(w)));
+}
+function applySidebarWidth(w) {
+  const v = clampSidebarWidth(w), aside = $('aside');
+  aside.style.width = v + 'px';
+  aside.style.flexBasis = v + 'px';
+  return v;
+}
+function loadSidebarWidth() {
+  try {
+    const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    if (saved > 0) applySidebarWidth(saved);
+  } catch (e) {}
+}
+(function setupSidebarResizer() {
+  const rz = $('#sidebarResizer');
+  let finalWidth = null;
+  rz.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    rz.setPointerCapture(e.pointerId);
+    rz.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+    finalWidth = null;
+  });
+  rz.addEventListener('pointermove', e => {
+    if (!rz.classList.contains('dragging')) return;
+    const mainRight = $('main').getBoundingClientRect().right;
+    finalWidth = applySidebarWidth(mainRight - e.clientX - rz.offsetWidth / 2);
+  });
+  const endDrag = () => {
+    if (!rz.classList.contains('dragging')) return;
+    rz.classList.remove('dragging');
+    document.body.style.userSelect = '';
+    if (finalWidth !== null) {
+      try { localStorage.setItem(SIDEBAR_WIDTH_KEY, String(finalWidth)); } catch (e) {}
+    }
+  };
+  rz.addEventListener('pointerup', endDrag);
+  rz.addEventListener('pointercancel', endDrag);
+})();
 
 function select(type, id) {
   sel = {type, id};
@@ -800,7 +869,14 @@ function addNode(x, y) {
 }
 
 function addEdge(a, b) {
-  if (!S.edges.some(e => e.from === a && e.to === b)) {
+  const exists = S.edges.some(e => e.from === a && e.to === b);
+  const reverse = S.edges.some(e => e.from === b && e.to === a);
+  if (!exists && reverse && !S.settings.allowMutualEdges) {
+    setFstat('두 노드가 서로 연결되는 화살표는 설정에서 양방향 연결을 허용해야 만들 수 있습니다.');
+    select('node', b);
+    return;
+  }
+  if (!exists) {
     const newEdge = {id: 'e' + S.nextId++, from: a, to: b, memo: ''};
     S.edges.push(newEdge);
     if (focusMode && (focusCreatedNodeIds.has(a) || focusCreatedNodeIds.has(b))) focusCreatedEdgeIds.add(newEdge.id);
@@ -1101,6 +1177,8 @@ function fitView() {
 /* ---------- 설정 ---------- */
 function renderSettings() {
   for (const [id, key] of SELECT_CTRL) $('#' + id).value = S.settings[key];
+  for (const [id, key] of NUMBER_CTRL) $('#' + id).value = S.settings[key];
+  $('#s_allowMutualEdges').checked = !!S.settings.allowMutualEdges;
   $('#s_canvasPadding').value = S.settings.canvasPadding;
   for (const key of COLOR_CTRL) {
     $('#s_' + key).value = S.settings[key];
@@ -1182,6 +1260,9 @@ $('#stage').addEventListener('scroll', closeCanvasMenu, {passive:true});
 
 $('#stage').addEventListener('mousedown', e => {
   if (e.button !== 0) return;
+  if (e.target.closest('.inline-editor')) return;   // 편집 칸을 누르면 글자 커서만 움직입니다
+  // 편집 칸 바깥을 누르면 포커스를 뺏어 저장되게 합니다 (아래 pan 처리의 preventDefault가 포커스 이동을 막기 때문)
+  if (inlineEditor && inlineEditor.contains(document.activeElement)) document.activeElement.blur();
   const ng = e.target.closest('[data-node]'), eg = e.target.closest('[data-edge]');
   if (ng) {
     const id = ng.dataset.node;
@@ -1212,15 +1293,93 @@ window.addEventListener('mousemove', e => {
   }
   if (!drag) return;
   const p = svgPoint(e), n = node(drag.id);
-  n.x = Math.max(0, p.x - drag.dx); n.y = Math.max(0, p.y - drag.dy);
-  drag.moved = true; render();
+  n.x = p.x - drag.dx; n.y = p.y - drag.dy;
+  drag.moved = true; render(); keepNodeVisible(drag.id);
 });
+// 노드 더블클릭: 캔버스 위에서 바로 제목·메모를 고칩니다
+let inlineEditor = null;
+// 화면 좌표에 있는 노드 id. 첫 클릭으로 노드가 다시 그려져도 찾을 수 있도록 좌표로 찾습니다
+function nodeIdAt(x, y) {
+  for (const el of document.elementsFromPoint(x, y)) {
+    const g = el.closest && el.closest('[data-node]');
+    if (g) return g.dataset.node;
+  }
+  return null;
+}
+function openInlineEditor(id) {
+  const n = node(id); if (!n) return;
+  if (inlineEditor) inlineEditor.remove();
+  const stage = $('#stage'), D = dims();
+  const rect = svg.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+  const left = rect.left - sr.left + stage.scrollLeft + (n.x - viewMinX) * zoom;
+  const top = rect.top - sr.top + stage.scrollTop + (n.y - viewMinY) * zoom;
+  // 노드 자리(제목·메모 영역)에 같은 배경으로 덮어서, 그 자리에서 바로 고칩니다
+  const z = zoom, W = D.w * z;
+  const fill = document.querySelector(`[data-node="${id}"] rect, [data-node="${id}"] circle`)?.getAttribute('fill') || '#ffffff';
+  const box = document.createElement('div');
+  box.className = 'inline-editor';
+  box.style.cssText = `left:${left}px;top:${top}px;width:${W}px;height:${Math.round(72 * z)}px;background:${fill}`;
+  box.innerHTML = `<textarea class="ie-title" style="left:${Math.round(8 * z)}px;top:${Math.round(4 * z)}px;width:${Math.round(W - 16 * z)}px;height:${Math.max(34, Math.round(38 * z))}px;font-size:${Math.max(11, 14 * z)}px;font-weight:700" placeholder="제목"></textarea>`
+    + (compactView ? '' : `<textarea class="ie-memo" style="left:${Math.round(8 * z)}px;top:${Math.round(44 * z)}px;width:${Math.round(W - 16 * z)}px;height:${Math.max(24, Math.round(26 * z))}px;font-size:${Math.max(10, 11 * z)}px" placeholder="메모"></textarea>`);
+  box.querySelector('.ie-title').value = n.title || '';
+  if (!compactView) box.querySelector('.ie-memo').value = n.memo || '';
+  stage.appendChild(box);
+  inlineEditor = box;
+  // 편집 칸 바깥을 누르면 저장하고 끝냅니다
+  box.addEventListener('focusout', e => {
+    if (box.contains(e.relatedTarget)) return;
+    if (box.dataset.done) return;
+    box.dataset.done = '1';
+    applyInlineEdit(box, id);
+    box.remove();
+    if (inlineEditor === box) inlineEditor = null;
+  });
+  // 덮은 배경을 눌러도 포커스가 빠지지 않게 합니다
+  box.addEventListener('mousedown', e => { if (e.target === box) e.preventDefault(); });
+  box.querySelector('.ie-title').focus();
+}
+function applyInlineEdit(box, id) {
+  const n = node(id); if (!n) return;
+  const t = box.querySelector('.ie-title').value;
+  const m = box.querySelector('.ie-memo').value;
+  if (t !== (n.title || '')) { n.title = t; save(`node:${id}:title`); }
+  if (m !== (n.memo || '')) { n.memo = m; save(`node:${id}:memo`); }
+  render(); renderPanel();
+}
+// 노드를 두 번 누르면 편집창을 엽니다. 첫 클릭으로 화면이 다시 그려져 dblclick 이벤트가 나오지 않으므로 직접 판정합니다
+let lastNodeDown = {id: null, t: 0, x: 0, y: 0};
+svg.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const id = nodeIdAt(e.clientX, e.clientY);
+  const now = Date.now();
+  if (id && lastNodeDown.id === id && now - lastNodeDown.t < 450 && Math.hypot(e.clientX - lastNodeDown.x, e.clientY - lastNodeDown.y) < 8) {
+    lastNodeDown = {id: null, t: 0, x: 0, y: 0};
+    // 마우스 기본 동작이 끝난 뒤에 열어야 포커스가 빠지지 않습니다
+    setTimeout(() => openInlineEditor(id), 0);
+    return;
+  }
+  lastNodeDown = id ? {id, t: now, x: e.clientX, y: e.clientY} : {id: null, t: 0, x: 0, y: 0};
+});
+
+// 드래그 중인 노드가 화면 가장자리에 닿으면 스크롤해서 계속 보이게 합니다
+function keepNodeVisible(id) {
+  const n = node(id); if (!n) return;
+  const stage = $('#stage'), D = dims();
+  const rect = svg.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+  const x = rect.left - sr.left + (n.x + D.w / 2 - viewMinX) * zoom;
+  const y = rect.top - sr.top + (n.y + D.h / 2 - viewMinY) * zoom;
+  const m = 40;
+  if (x < m) stage.scrollLeft -= (m - x);
+  else if (x > stage.clientWidth - m) stage.scrollLeft += (x - (stage.clientWidth - m));
+  if (y < m) stage.scrollTop -= (m - y);
+  else if (y > stage.clientHeight - m) stage.scrollTop += (y - (stage.clientHeight - m));
+}
 window.addEventListener('mouseup', () => {
   if (drag) { if (drag.moved) save(); drag = null; }
   if (pan) { pan = null; $('#stage').classList.remove('is-panning'); }
 });
 svg.addEventListener('dblclick', e => {
-  if (e.target.closest('[data-node],[data-edge]')) return;
+  if (e.target.closest('[data-node],[data-edge]') || nodeIdAt(e.clientX, e.clientY)) return;
   const p = svgPoint(e), D = dims();
   addNode(p.x - D.w / 2, p.y - D.h / 2);
 });
@@ -1250,6 +1409,17 @@ for (const key of COLOR_CTRL) {
   };
   input.addEventListener('change', apply);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+}
+$('#s_allowMutualEdges').addEventListener('change', e => {
+  S.settings.allowMutualEdges = e.target.checked; save();
+});
+for (const [id, key, min, max] of NUMBER_CTRL) {
+  $('#' + id).addEventListener('input', e => {
+    const value = Number(e.target.value);
+    if (!Number.isFinite(value) || e.target.value === '') return;
+    S.settings[key] = Math.max(min, Math.min(max, value));
+    save(); render();
+  });
 }
 $('#s_canvasPadding').addEventListener('input', e => {
   const value = Number(e.target.value);
@@ -1515,6 +1685,7 @@ ensureSettings();
 resetHistory();
 let sidebarHiddenAtLoad = false;
 try { sidebarHiddenAtLoad = localStorage.getItem(SIDEBAR_KEY) === '1'; } catch (e) {}
+loadSidebarWidth();
 setSidebarVisible(!sidebarHiddenAtLoad);
 buildPresets();
 render(); renderPanel();
