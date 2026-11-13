@@ -1,5 +1,8 @@
 # 인과 편집기 (Causal Editor)
 
+> 내려받기: https://github.com/iamtalker/causal-editor/releases · [소개글](docs/introduction.md)
+
+
 바이브 코딩은 주로 하나의 프로젝트를 발전시키는 데 초점이 있습니다. 그런데 사람의 삶은 원인과 결과로 이루어집니다.
 
 예를 들어 "부자가 된다"라는 목적을 정해 두었다고 합시다. 이 목적에 이르는 경우의 수와 시도해 볼 만한 방법은 매우 많습니다.

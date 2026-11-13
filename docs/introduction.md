@@ -1,5 +1,8 @@
 # 인과 편집기: 삶을 트리가 아니라 원인과 결과의 그래프로 그리는 무료 도구
 
+내려받기: https://github.com/iamtalker/causal-editor/releases
+
+
 사람의 삶은 원인과 결과로 이루어져 있습니다. 그런데 마인드맵이나 아웃라이너는 하위 항목이 상위 항목 하나만 가지는 **트리**입니다. 실제로는 하나의 상태가 여러 원인에서 나오기도 하고, 하나의 상태가 여러 결과의 원인이 되기도 합니다. 인과 편집기는 이 구조를 그대로 그리려고 만든 도구입니다.
 
 ![예제 샘플의 전체 모습](https://raw.githubusercontent.com/iamtalker/causal-editor/master/docs/screenshots/01-overview.png)
@@ -50,10 +53,8 @@
 ## 사용 방법
 
 1. Node.js를 설치합니다. 별도 패키지는 필요 없습니다.
-2. 저장소를 받아 `인과편집기.bat`을 실행합니다. 창 없이 서버가 켜지고 브라우저가 열립니다.
+2. 위 릴리즈 페이지에서 최신 버전(Source code)을 받아 압축을 풀고 `인과편집기.bat`을 실행합니다. 창 없이 서버가 켜지고 브라우저가 열립니다.
 3. 예제를 보려면 설정에서 "JSON 불러오기"로 `샘플/인과편집기_예제_샘플.json`을 엽니다.
-
-- 저장소: https://github.com/iamtalker/causal-editor
 
 지금은 Windows 기준으로 만들고 시험했습니다. 다른 운영체제에서는 `node 프로그램/server.js`로 실행할 수 있지만 충분히 확인하지는 못했습니다.
 
