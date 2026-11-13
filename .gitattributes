@@ -1,0 +1,6 @@
+# 윈도우 배치·스크립트 파일은 변환 없이 CRLF 그대로 저장합니다(-text).
+# LF만 있으면 cmd가 goto·라벨이 있는 .bat을 잘못 읽습니다. 이 파일들은 CRLF를 유지해서 편집하세요.
+*.bat -text
+*.cmd -text
+*.vbs -text
+*.ps1 -text
