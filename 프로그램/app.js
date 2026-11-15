@@ -892,11 +892,13 @@ function layoutNodes(mode) {
       n.y = Math.round(cy + R * Math.sin(t) - H / 2);
     });
   } else {
-    // 화살표 흐름 순서(시작 → 종료)로 노드를 한 줄로 세웁니다. 종료 노드는 맨 끝에 둡니다.
+    // 화살표 흐름 순서(시작 → 종료)로 노드를 한 줄로 세웁니다. 같은 단계 안에서는 진행 상태 순(시작·미착수 → … → 종료)으로, 종료 노드는 맨 끝에 둡니다.
+    // 모든 모양에서 방향이 같습니다: 시작이 위·왼쪽, 종료가 아래·오른쪽.
     const goalIds = new Set(goals.map(g => g.id));
     const lastLevel = Math.max(0, ...S.nodes.filter(n => !goalIds.has(n.id)).map(n => level.get(n.id)));
     for (const g of goals) level.set(g.id, lastLevel + 1);
-    const flow = [...S.nodes].sort((a, b) => level.get(a.id) - level.get(b.id) || a.y - b.y || a.x - b.x);
+    const statusRank = n => { const i = ['start', 'not_started', 'in_progress', 'completed', 'stopped', 'failed', 'end'].indexOf(n.status); return i < 0 ? 1 : i; };
+    const flow = [...S.nodes].sort((a, b) => level.get(a.id) - level.get(b.id) || statusRank(a) - statusRank(b) || a.y - b.y || a.x - b.x);
     const STEP_X = W + 50, STEP_Y = H + 40;
     // 줄마다 놓을 노드 수(widths, 합이 노드 수)를 정해 두고 노드를 순서대로 채웁니다. 줄은 가운데 맞춤입니다.
     const place = (nodes, widths) => {
@@ -909,7 +911,7 @@ function layoutNodes(mode) {
     };
     // 남는 노드 수(extra)를 order에 적은 줄부터 한 칸씩 더해 줍니다.
     const spread = (widths, extra, order) => { for (let k = 0; k < extra; k++) widths[order[k % order.length]]++; return widths; };
-    // 피라미드 줄 폭: 위에서부터 1, 2, 3 … 개. 남는 노드는 아래쪽 줄에 한 개씩 더합니다.
+    // 피라미드 줄 폭: 위에서부터 1, 2, 3 … 개(아래가 넓음). 남는 노드는 아래쪽 줄에 한 개씩 더합니다.
     const pyramidWidths = () => {
       const m = Math.max(1, Math.floor((Math.sqrt(8 * N + 1) - 1) / 2));
       const widths = Array.from({length: m}, (_, i) => i + 1);
@@ -920,11 +922,8 @@ function layoutNodes(mode) {
       const c = Math.ceil(Math.sqrt(N));
       flow.forEach((n, i) => { n.x = 40 + (i % c) * (W + 60); n.y = 40 + Math.floor(i / c) * (H + 60); });
     } else if (mode === 'pyramid') {
-      // 꼭대기가 종료, 아래쪽 넓은 줄이 시작입니다(흐름이 아래에서 위로).
-      const widths = pyramidWidths(), rev = [...flow].reverse(), seq = [];
-      let p = 0;
-      for (const w of widths) { seq.push(...rev.slice(p, p + w).reverse()); p += w; }   // 줄 안에서는 시작이 왼쪽에 오도록 뒤집습니다
-      place(seq, widths);
+      // 꼭대기가 시작, 아래쪽 넓은 줄이 종료입니다(흐름이 위에서 아래로).
+      place(flow, pyramidWidths());
     } else if (mode === 'inversePyramid') {
       // 위쪽 넓은 줄이 시작, 아래쪽 뾰족한 끝이 종료입니다(흐름이 위에서 아래로).
       place(flow, pyramidWidths().reverse());
