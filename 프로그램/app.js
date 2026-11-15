@@ -1564,9 +1564,61 @@ setSidebarVisible(!sidebarHiddenAtLoad);
 buildPresets();
 render(); renderPanel();
 // 저장소 방식(브라우저·폴더)을 정한 뒤 변경 이력과 그래프를 읽습니다.
+/* ---------- 데이터 안전: 버전 기록의 "N시간마다 자동 저장" 옵션, 첫 실행 때 폴더 연결 권고 ---------- */
+// 옵션이 켜져 있으면(기본 켜짐, 기본 24시간마다) 버전 기록에 "자동 저장 날짜 시각"으로 남깁니다. 마지막 자동 저장 뒤 정한 시간이 지났고 그래프가 마지막 버전과 다를 때만 만듭니다.
+// 자동 저장한 버전도 일반 버전과 같아서 버전 기록 창에서 복원·삭제할 수 있고, 자동으로 지우지는 않습니다.
+// 폴더를 연결한 상태면 버전이 폴더의 변경이력/에 파일로 남습니다(브라우저 저장만 쓸 때는 브라우저 안에만 남아 사이트 데이터를 지우면 함께 사라집니다).
+const AUTO_PREFIX = '자동 저장 ', AUTO_VERSION_KEY = 'causal-editor-auto-version', AUTO_HOURS_KEY = 'causal-editor-auto-hours';
+const AUTO_HOURS_DEFAULT = 24, AUTO_HOURS_MAX = 720;
+const autoVersionOn = () => { try { return localStorage.getItem(AUTO_VERSION_KEY) !== '0'; } catch (e) { return true; } };
+const autoHours = () => {
+  let h = AUTO_HOURS_DEFAULT;
+  try { h = Math.round(Number(localStorage.getItem(AUTO_HOURS_KEY))) || AUTO_HOURS_DEFAULT; } catch (e) { /* 기본값 */ }
+  return Math.min(AUTO_HOURS_MAX, Math.max(1, h));
+};
+let autoSaveBusy = false;
+async function maybeAutoSaveVersion() {
+  if (!autoVersionOn() || autoSaveBusy || mdReadFailed || !S.nodes.length) return;
+  if (Store.state.mode === 'folder' && !Store.state.folderReady) return;   // 폴더 권한이 없으면 건너뜁니다
+  autoSaveBusy = true;
+  try {
+    const last = VERSION_LIST.find(v => String(v.summary).startsWith(AUTO_PREFIX));   // VERSION_LIST는 최신순
+    if (!last || Date.now() - new Date(last.at).getTime() >= autoHours() * 60 * 60 * 1000) {
+      await createVersion(AUTO_PREFIX + new Date().toLocaleString('sv-SE').slice(0, 16), S, false);
+    }
+  } finally { autoSaveBusy = false; }
+}
+$('#autoVersion').checked = autoVersionOn();
+$('#autoHours').value = autoHours();
+$('#autoVersion').addEventListener('change', e => {
+  try { localStorage.setItem(AUTO_VERSION_KEY, e.target.checked ? '1' : '0'); } catch (err) {}
+  if (e.target.checked) maybeAutoSaveVersion().catch(() => {});
+});
+$('#autoHours').addEventListener('change', e => {
+  const h = Math.min(AUTO_HOURS_MAX, Math.max(1, Math.round(Number(e.target.value)) || AUTO_HOURS_DEFAULT));   // 1시간 단위 정수만
+  e.target.value = h;
+  try { localStorage.setItem(AUTO_HOURS_KEY, String(h)); } catch (err) {}
+  maybeAutoSaveVersion().catch(() => {});
+});
+const FOLDER_TIP_KEY = 'causal-editor-folder-tip-v1';
+function maybeShowFolderTip() {
+  if (Store.state.mode !== 'browser' || !Store.folderSupported) return;
+  try { if (localStorage.getItem(FOLDER_TIP_KEY)) return; } catch (e) { /* 저장소를 못 읽으면 안내만 보여 줍니다 */ }
+  $('#folderTipDlg').showModal();
+  try { localStorage.setItem(FOLDER_TIP_KEY, '1'); } catch (e) { /* 기록하지 못하면 다음에도 보여 줍니다 */ }   // 한 번 보여 주면 어떻게 닫아도 다시 묻지 않습니다
+}
+$('#btnTipLater').onclick = () => $('#folderTipDlg').close();
+$('#btnTipConnect').onclick = async () => { $('#folderTipDlg').close(); await connectFolder(); };
+setInterval(() => maybeAutoSaveVersion().catch(() => {}), 10 * 60 * 1000);   // 오래 켜 둔 탭에서도 정한 시간이 지나면 만듭니다
+document.addEventListener('visibilitychange', () => { if (!document.hidden) maybeAutoSaveVersion().catch(() => {}); });
+
 Store.init().then(() => {
   if (Store.state.mode === 'browser' && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});   // 브라우저가 저장 공간을 임의로 비우지 않도록 요청
   loadDataFolderSetting();
   loadVersions().then(() => { renderVersions(); }).catch(err => setFstat(`변경 이력을 읽지 못했습니다: ${err.message}`));
   return loadSavedGraph(browserData);
+}).then(async () => {
+  try { await loadVersions(); renderVersions(); } catch (e) { /* 위에서 이미 안내합니다 */ }
+  await maybeAutoSaveVersion();
+  maybeShowFolderTip();
 }).catch(err => setFstat(`그래프를 읽지 못했습니다: ${err.message}`));

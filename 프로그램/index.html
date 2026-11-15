@@ -172,6 +172,13 @@
 
 <div id="canvasMenu" role="menu" aria-label="캔버스 메뉴" hidden></div>
 
+<dialog id="folderTipDlg">
+  <h2 style="margin-top:0;font-size:17px">데이터를 안전하게 보관하세요</h2>
+  <p class="hint">지금은 이 브라우저에만 저장됩니다. 확장 프로그램을 제거하거나 브라우저의 사이트 데이터를 지우면 그래프가 사라집니다.</p>
+  <p class="hint">폴더를 연결하면 노드 파일(.md)이 그 폴더에 저장되고, 자동 백업도 그 폴더에 남습니다. 구글 드라이브나 원드라이브 같은 동기화 폴더를 고르면 여러 컴퓨터에서도 쓸 수 있습니다. 폴더는 이 확장 프로그램 폴더 밖에 두세요. 나중에 설정의 "데이터 폴더"에서도 연결할 수 있습니다.</p>
+  <div class="dlg-foot"><button id="btnTipLater" type="button">나중에</button><button id="btnTipConnect" type="button">폴더 연결하기</button></div>
+</dialog>
+
 <dialog id="helpDlg">
   <h2 style="margin-top:0;font-size:17px">도움말</h2>
   <h3 class="hh">편집</h3>
@@ -213,7 +220,8 @@
 
 <dialog id="versionDlg">
   <h2 style="margin-top:0;font-size:17px">그래프 버전 기록</h2>
-  <p class="hint">버전 기록은 현재 상태 저장을 눌렀을 때만 남습니다.</p>
+  <p class="hint">버전은 현재 상태 저장을 눌렀을 때 남습니다. 아래 옵션을 켜면 정한 시간마다 자동으로도 남습니다(편집기를 열어 둔 동안, 그래프가 바뀌었을 때만). 폴더를 연결해 두면 버전이 그 폴더의 변경이력/에 파일로 남습니다.</p>
+  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="autoVersion" checked> 자동 저장</label><input type="number" id="autoHours" min="1" max="720" step="1" value="24" style="width:70px" aria-label="자동 저장 간격(시간)"> 시간마다</div>
   <label>수동 버전 요약 (비워 두면 자동으로 적힙니다)<input id="versionSummary" maxlength="160" placeholder="예: 실행 결과를 반영해 다음 단계를 수정"></label>
   <button id="btnCreateVersion">현재 상태 저장</button>
   <div id="versionList" class="hint" style="margin-top:16px;max-height:45vh;overflow:auto"></div>
