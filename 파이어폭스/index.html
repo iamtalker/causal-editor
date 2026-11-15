@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'self'">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>인과 편집기</title>
+<script src="md-graph.js"></script>
+<script src="storage.js"></script>
+<style>
+  /* 디자인 토큰: 무채색 바탕에 잉크색 한 가지, 포커스 표시에만 파란색을 씁니다 */
+  :root{
+    --bg:#fafafa;--surface:#fff;--line:#e8eaed;--line-strong:#d3d7dc;--hover:#f3f4f6;
+    --text:#1a1d21;--muted:#6b7280;--faint:#9aa1ab;--ink:#1a1d21;--focus:#3b6ff5;--danger:#b42318;
+    --radius:6px;--shadow:0 6px 24px rgba(17,24,39,.10);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,"Pretendard","Malgun Gothic",sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+  header{position:relative;z-index:2;display:flex;flex-wrap:wrap;gap:6px 20px;align-items:center;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+  header h1{font-size:14px;font-weight:650;letter-spacing:-.2px;margin:0 2px 0 0;white-space:nowrap}
+  .toolbar-group{display:flex;flex:0 0 auto;gap:4px;align-items:center}
+  .toolbar-group label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;white-space:nowrap}
+  button,.btn{padding:5px 10px;border:1px solid transparent;border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer;font:inherit;font-size:13px;line-height:1.4;white-space:nowrap;transition:background .12s,border-color .12s,color .12s}
+  button:hover,.btn:hover{background:var(--hover)}
+  button:focus-visible,.btn:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+  #btnAdd{background:var(--ink);color:#fff}
+  #btnAdd:hover{background:#363b43}
+  #btnFocus[aria-pressed="true"]{background:var(--hover);border-color:var(--line-strong);font-weight:600}
+  #btnReset{color:var(--faint)}
+  #btnReset:hover{color:var(--danger)}
+  .toolbar-group a{padding:5px 10px;border-radius:var(--radius);color:var(--muted);font-size:13px;line-height:1.4;white-space:nowrap;text-decoration:none;transition:background .12s,color .12s}
+  .toolbar-group a:hover{background:var(--hover);color:var(--text)}
+  .toolbar-group a:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+  .history-buttons{gap:2px}
+  .toolbar-end{display:flex;flex:0 0 auto;gap:20px;align-items:center;margin-left:auto}
+  .history-buttons button{width:28px;height:28px;padding:0;display:grid;place-items:center;font-size:17px;line-height:1;color:var(--muted)}
+  #statusFilter,#layoutMode,#nodeSearch{padding:5px 8px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface);font:inherit;font-size:13px;color:var(--text)}
+  #statusFilter{max-width:130px}
+  #layoutMode{max-width:170px;color:var(--text)}
+  #layoutMode:hover{background:var(--hover)}
+  #layoutOptions,#searchResults,#canvasMenu{border:1px solid var(--line);border-radius:8px;background:var(--surface);box-shadow:var(--shadow)}
+  #layoutOptions{position:fixed;z-index:40;min-width:170px;max-height:min(320px,70vh);overflow:auto;padding:4px}
+  #layoutOptions[hidden]{display:none}
+  #layoutOptions button{display:block;width:100%;padding:6px 10px;border:0;border-radius:4px;text-align:left}
+  #layoutOptions button[aria-selected="true"]{background:var(--hover);font-weight:600}
+  #fstat{display:block;flex:0 0 auto;min-width:0;max-width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--line);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--faint)}
+  #fstat:empty{display:none}
+  .search-wrap{position:relative;display:flex;align-items:center;gap:4px}
+  #nodeSearch{width:160px}
+  #nodeSearch::placeholder{color:var(--faint)}
+  #searchResults{position:absolute;z-index:20;top:calc(100% + 6px);left:0;width:min(340px,80vw);max-height:340px;overflow:auto}
+  #searchResults[hidden]{display:none}
+  #searchResults button{display:block;width:100%;padding:8px 12px;border:0;border-radius:0;text-align:left;white-space:normal}
+  #searchResults button+button{border-top:1px solid var(--line)}
+  .search-detail{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  button:disabled:hover{background:transparent}
+  .btn input{display:none}
+  main{flex:1;display:flex;min-height:0}
+  #stage{flex:1;overflow:auto;position:relative;background:var(--bg);scrollbar-color:#c4c9d0 transparent;scrollbar-width:thin;cursor:grab}
+  #canvas{display:block;margin-inline:auto}
+  #stage.is-panning{cursor:grabbing;user-select:none}
+  .inline-editor{position:absolute;z-index:5;box-sizing:border-box;overflow:hidden;cursor:text}
+  .inline-editor textarea{position:absolute;box-sizing:border-box;margin:0;padding:2px 4px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--text);font-family:inherit;line-height:1.3;resize:none;overflow:hidden;outline:none}
+  .inline-editor textarea.ie-memo{overflow-y:auto}
+  .inline-editor select{position:absolute;box-sizing:border-box;margin:0;padding:0 2px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--muted);font-family:inherit;cursor:pointer}
+  .inline-editor select:hover,.inline-editor select:focus{background:#fff;border-color:var(--focus);outline:none;color:var(--text)}
+  .inline-editor textarea:focus{background:#fff;border-color:var(--focus);outline:none}
+  #canvasMenu{position:fixed;z-index:30;min-width:190px;padding:4px}
+  #canvasMenu[hidden]{display:none}
+  #canvasMenu button{display:block;width:100%;padding:7px 10px;border:0;border-radius:4px;text-align:left}
+  #canvasMenu button.danger{color:var(--danger)}
+  #tip[hidden]{display:none}
+  #tip{position:sticky;top:0;z-index:1;background:var(--surface);border-bottom:1px solid var(--line);padding:7px 16px;font-size:12px;color:var(--muted)}
+  aside{width:300px;flex:0 0 300px;border-left:1px solid var(--line);background:var(--surface);padding:20px 18px;overflow:auto;box-sizing:border-box;display:flex;flex-direction:column}
+  aside[hidden]{display:none}
+  #sidebarResizer{flex:0 0 5px;margin-left:-3px;z-index:1;cursor:col-resize;touch-action:none;background:transparent;user-select:none;transition:background .12s}
+  #sidebarResizer:hover,#sidebarResizer.dragging{background:var(--line-strong)}
+  #sidebarResizer[hidden]{display:none}
+  @media (max-width:800px){#sidebarResizer{display:none}}
+  #help{color:var(--muted);font-size:13px;line-height:1.75}
+  aside label{display:block;font-size:11px;font-weight:600;letter-spacing:.2px;color:var(--muted);margin-top:14px}
+  aside label:first-child{margin-top:0}
+  aside input,aside textarea,aside select{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface);color:var(--text);font:inherit;font-size:13px;font-weight:400;letter-spacing:0;margin-top:5px}
+  aside input:focus,aside textarea:focus,aside select:focus{border-color:var(--focus);outline:none}
+  aside input[readonly]{background:var(--bg);color:var(--muted)}
+  aside textarea{min-height:52px;resize:vertical;line-height:1.5}
+  #nodeForm:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column}
+  #memoLabel{flex:0 1 420px;min-height:200px;display:flex;flex-direction:column}
+  #f_memo{flex:1;min-height:180px}
+  aside button{margin-top:10px;border-color:var(--line-strong);text-align:center}
+  #btnDelNode,#btnDelEdge{color:var(--danger);border-color:transparent}
+  #btnDelNode:hover,#btnDelEdge:hover{background:#fef3f2}
+  dialog{border:0;border-radius:12px;padding:24px;max-width:520px;width:90vw;color:var(--text);box-shadow:0 20px 60px rgba(17,24,39,.22)}
+  dialog::backdrop{background:rgba(17,24,39,.35)}
+  dialog h2,dialog h3{font-weight:650;letter-spacing:-.2px}
+  dialog button,dialog .btn{margin-top:14px;border-color:var(--line-strong)}
+  dialog label{display:block;font-size:13px;margin-top:12px}
+  dialog select,dialog input[type=number],dialog input:not([type]),dialog input[type=text]{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface);color:var(--text)}
+  dialog select{margin-left:6px}
+  dialog input[type=checkbox]{accent-color:var(--ink)}
+  dialog .btn{display:inline-block}
+  .cset{margin-top:14px}
+  .cl{display:block;font-size:13px}
+  .crow{display:flex;gap:8px;align-items:center;margin-top:5px}
+  .crow input{width:110px}
+  #s_canvasPadding{width:100px}
+  .scl{display:inline-block;width:52px;font-size:13px}
+  .sw{cursor:pointer;display:inline-block;width:26px;height:26px;border-radius:var(--radius);border:1px solid var(--line-strong)}
+  .presets{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
+  .interval-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
+  .interval-row label{display:block;font-size:12px;color:var(--muted)}
+  .interval-row input{width:72px}
+  .pc{width:22px;height:22px;padding:0;margin:0;border:1px solid var(--line-strong);border-radius:50%;cursor:pointer}
+  .dlg-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;padding-top:4px;border-top:1px solid var(--line)}
+  dialog a{color:var(--text);text-underline-offset:2px}
+  dialog a:hover{color:var(--focus)}
+  dialog h3.hh{font-size:12px;font-weight:650;color:var(--muted);margin:16px 0 4px}
+  dialog ul.hint{padding-left:18px;margin:0}
+  .hint{font-size:13px;color:var(--muted);line-height:1.8}
+  .muted{font-size:12px;color:var(--faint);margin-bottom:4px;line-height:1.6}
+  @media (max-width:800px){header{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}}
+  @media (max-width:1000px){header{gap:6px 14px}.toolbar-group button{padding:5px 8px}.history-buttons button{padding:0}}
+  .panel-toggle{display:none;align-items:center;gap:6px;margin-bottom:8px;font-size:13px;color:var(--text)}
+  @media (max-width:800px){.panel-toggle{display:flex}aside.minimized{max-height:44px;overflow:hidden;padding-top:10px;padding-bottom:10px}main{flex-direction:column}aside{width:auto;flex:0 0 auto;border-left:0;border-top:1px solid var(--line);max-height:35vh}#memoLabel{flex-basis:240px;min-height:160px}#f_memo{min-height:140px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>인과 편집기</h1>
+  <div class="toolbar-group" role="group" aria-label="편집"><button id="btnAdd">노드 추가</button><div class="toolbar-group history-buttons" aria-label="편집 기록"><button id="btnUndo" type="button" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기" disabled>↶</button><button id="btnRedo" type="button" title="다시 실행 (Ctrl+Y 또는 Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↷</button></div>
+    <div class="layout-picker"><button id="layoutMode" type="button" title="정렬 방식을 선택하면 바로 적용됩니다" aria-haspopup="listbox" aria-expanded="false">피라미드 ▾</button><div id="layoutOptions" role="listbox" aria-label="정렬 방식" hidden>
+      <button type="button" role="option" data-layout="pyramid" aria-selected="true">피라미드</button><button type="button" role="option" data-layout="inversePyramid" aria-selected="false">역피라미드</button><button type="button" role="option" data-layout="diamond" aria-selected="false">다이아몬드</button><button type="button" role="option" data-layout="circle" aria-selected="false">원형</button><button type="button" role="option" data-layout="grid" aria-selected="false">격자</button>
+    </div></div></div>
+  <div class="toolbar-group" role="group" aria-label="보기"><label title="노드를 제목 한 줄짜리 작은 상자로 보여 줍니다. 제목만 보여 주어 그래프가 한눈에 들어옵니다"><input type="checkbox" id="compactView"> 간편 보기</label><button id="btnFocus" aria-pressed="false" title="선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다">흐름 모드</button><button id="btnConn" aria-pressed="false" title="선택한 노드와 연결된 노드(원인·결과 모두)만 표시합니다. 다른 노드를 선택하면 따라갑니다">연결 모드</button><select id="connDepth" aria-label="연결 단계" title="몇 단계 떨어진 노드까지 보일지 정합니다"><option value="1">1단계</option><option value="2">2단계</option><option value="3">3단계</option><option value="4">4단계</option><option value="5">5단계</option></select></div>
+  <div class="toolbar-group" role="group" aria-label="화면"><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
+  <div class="toolbar-group" role="search"><label title="고른 상태가 아닌 노드와 화살표는 흐리게 표시되고, 검색창 목록에도 그 상태의 노드만 나옵니다">상태 보기 <select id="statusFilter"><option value="all">전체</option><option value="start">시작</option><option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option><option value="end">종료</option></select></label><div class="search-wrap"><input id="nodeSearch" type="search" placeholder="노드 제목·메모 검색" aria-label="노드 제목과 메모 검색" autocomplete="off"><div id="searchResults" role="listbox" aria-label="검색 결과" hidden></div></div></div>
+  <div class="toolbar-end">
+  <div class="toolbar-group" role="group" aria-label="파일"><button id="btnVersions">버전 기록</button><button id="btnReload" title="노드 파일 폴더를 다시 읽습니다. 다른 기기에서 동기화된 내용을 반영합니다">파일 다시 읽기</button><button id="btnReset" title="모든 노드와 화살표를 지우고 빈 그래프로 시작합니다(설정은 유지)">모두 지우기</button></div>
+  <div class="toolbar-group" role="group" aria-label="앱"><button id="btnSettings">설정</button><button id="btnHelp">도움말</button><a id="linkSupport" href="https://bookk.co.kr/bookStore/6af3769e04f230844ed9303c" target="_blank" rel="noopener noreferrer" title="제 책을 소개합니다. 도움이 되셨다면 구매로 응원해 주세요 (부크크 서점, 새 탭으로 열림)">책 소개</a></div>
+  </div>
+</header>
+<main>
+  <div id="stage"><div id="tip"></div><svg id="canvas" width="2400" height="1600"></svg></div>
+  <div id="sidebarResizer" role="separator" aria-orientation="vertical" title="드래그해서 사이드바 넓이를 조절합니다"></div>
+  <aside>
+    <label class="panel-toggle"><input type="checkbox" id="panelExpand" checked> 패널 펼치기</label>
+    <div id="help" class="hint">
+      인과 그래프 하나를 편집합니다. 노드 Markdown 파일(노드파일 폴더)이 원본이며, 그래프 JSON은 내부데이터 폴더에 보조로 저장됩니다.<br><br>
+      노드나 화살표를 클릭하면 여기에서 내용을 편집할 수 있습니다.<br>
+      사용법은 상단의 <b>도움말</b> 버튼을 누르세요.
+    </div>
+    <div id="nodeForm" hidden>
+      <label>진행 상태
+        <select id="f_status">
+          <option value="start">시작</option><option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option><option value="end">종료</option>
+        </select>
+      </label>
+      <label>제목<input id="f_title"></label>
+      <label id="memoLabel">메모<textarea id="f_memo"></textarea></label>
+      <button id="btnOpenMd" title="이 노드의 Markdown 내용을 새 탭에서 봅니다">노드 md 파일 보기</button>
+      <button id="btnDelNode">이 노드 삭제</button>
+    </div>
+    <div id="edgeBox" hidden>
+      <p id="edgeText" class="hint"></p>
+      <label>메모<textarea id="e_memo"></textarea></label>
+      <button id="btnDelEdge">이 화살표 삭제</button>
+    </div>
+    <span id="fstat" class="muted" role="status" aria-live="polite"></span>
+  </aside>
+</main>
+
+<div id="canvasMenu" role="menu" aria-label="캔버스 메뉴" hidden></div>
+
+<dialog id="folderTipDlg">
+  <h2 style="margin-top:0;font-size:17px">데이터를 안전하게 보관하세요</h2>
+  <p class="hint">지금은 이 브라우저에만 저장됩니다. 확장 프로그램을 제거하거나 브라우저의 사이트 데이터를 지우면 그래프가 사라집니다.</p>
+  <p class="hint">폴더를 연결하면 노드 파일(.md)이 그 폴더에 저장되고, 자동 백업도 그 폴더에 남습니다. 구글 드라이브나 원드라이브 같은 동기화 폴더를 고르면 여러 컴퓨터에서도 쓸 수 있습니다. 폴더는 이 확장 프로그램 폴더 밖에 두세요. 나중에 설정의 "데이터 폴더"에서도 연결할 수 있습니다.</p>
+  <div class="dlg-foot"><button id="btnTipLater" type="button">나중에</button><button id="btnTipConnect" type="button">폴더 연결하기</button></div>
+</dialog>
+
+<dialog id="helpDlg">
+  <h2 style="margin-top:0;font-size:17px">도움말</h2>
+  <h3 class="hh">편집</h3>
+  <ul class="hint">
+    <li>빈 곳 더블클릭: 노드 추가</li>
+    <li>노드 더블클릭: 그 자리에서 제목·메모·진행 상태 편집 (제목 Enter 또는 메모 Ctrl+Enter 저장, Esc 취소, Tab 칸 이동, 사이드바를 열지 않아도 됩니다)</li>
+    <li>노드 선택 후 Shift+클릭 다른 노드: 화살표 연결 (원인 → 결과)</li>
+    <li>노드·화살표 클릭: 오른쪽 패널에서 진행 상태와 메모 편집</li>
+    <li>Delete: 선택한 노드·화살표 삭제 / 마우스 오른쪽 버튼: 편집 메뉴</li>
+    <li>노드 드래그: 위치 이동 / 빈 곳 드래그: 화면 이동</li>
+    <li>Ctrl+Z, Ctrl+Y(Ctrl+Shift+Z): 되돌리기·다시 실행</li>
+  </ul>
+  <h3 class="hh">진행 상태</h3>
+  <ul class="hint">
+    <li>시작·미착수·진행 중·완료·중단·실패·종료. 시작과 종료는 화살표가 아니라 진행 상태로 직접 정합니다</li>
+    <li>상태에 따라 노드 색이 달라지며, 색은 설정에서 바꿀 수 있습니다</li>
+    <li>노드를 선택하면 그 노드에 연결된 선이 검정으로 굵게 표시됩니다</li>
+  </ul>
+  <h3 class="hh">보기·정렬</h3>
+  <ul class="hint">
+    <li>상태 보기: 고른 상태의 노드는 진하게, 나머지는 흐리게 표시하고 검색 목록도 그 상태만 보여 줍니다 (파일에 저장되지 않는 화면 설정)</li>
+    <li>간편 보기: 노드를 제목 한 줄짜리 작은 상자로 표시합니다</li>
+    <li>연결 모드: 노드를 선택하면 그 노드와 연결된 노드(원인·결과 모두)만 표시합니다. 처음 고른 노드가 중심으로 고정되고, 옆의 단계 상자로 몇 단계 떨어진 노드까지 볼지 정합니다. 보이는 다른 노드를 눌러도 중심은 그대로이며, 중심을 바꾸려면 연결 모드를 껐다가 다시 켭니다. 흐름 모드와는 함께 쓰지 않습니다.</li>
+    <li>흐름 모드: 시작 노드를 고르면 그 노드에서 화살표 방향으로 이어지는 경로만 표시합니다. 흐름 모드 중 새로 만든 노드는 계속 보이며, 종료하면 전체가 다시 보입니다</li>
+    <li>정렬: 피라미드, 역피라미드, 다이아몬드, 원형, 격자</li>
+  </ul>
+  <h3 class="hh">찾기</h3>
+  <ul class="hint">
+    <li>상단 검색: 노드 제목·메모를 검색하고 결과를 누르면 그 노드로 이동합니다. 검색창이 비어 있을 때 누르면 연결(화살표)이 많은 순서의 목록이 나옵니다</li>
+  </ul>
+  <h3 class="hh">저장</h3>
+  <ul class="hint">
+    <li>편집 내용은 노드 파일로 자동 저장됩니다. 설정에서 색·모양·연결선을 바꾸고 JSON 저장·불러오기, 데이터 폴더 지정도 할 수 있습니다</li>
+  </ul>
+  <h3 class="hh">책 소개</h3>
+  <p class="hint" style="margin:0">이 프로그램은 무료입니다. 제 책을 소개합니다. 도움이 되었다면 구매로 응원해 주세요. <a href="https://bookk.co.kr/bookStore/6af3769e04f230844ed9303c" target="_blank" rel="noopener noreferrer">부크크 서점에서 보기</a></p>
+  <button id="btnHelpClose">닫기</button>
+</dialog>
+
+<dialog id="versionDlg">
+  <h2 style="margin-top:0;font-size:17px">그래프 버전 기록</h2>
+  <p class="hint">버전은 현재 상태 저장을 눌렀을 때 남습니다. 아래 옵션을 켜면 정한 시간마다 자동으로도 남습니다(편집기를 열어 둔 동안, 그래프가 바뀌었을 때만). 폴더를 연결해 두면 버전이 그 폴더의 변경이력/에 파일로 남습니다.</p>
+  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="autoVersion" checked> 자동 저장</label><input type="number" id="autoHours" min="1" max="720" step="1" value="24" style="width:70px" aria-label="자동 저장 간격(시간)"> 시간마다</div>
+  <label>수동 버전 요약 (비워 두면 자동으로 적힙니다)<input id="versionSummary" maxlength="160" placeholder="예: 실행 결과를 반영해 다음 단계를 수정"></label>
+  <button id="btnCreateVersion">현재 상태 저장</button>
+  <div id="versionList" class="hint" style="margin-top:16px;max-height:45vh;overflow:auto"></div>
+  <button id="btnVersionClose">닫기</button>
+</dialog>
+
+<dialog id="setDlg">
+  <h2 style="margin-top:0;font-size:17px">설정</h2>
+  <input type="color" id="colorPicker" tabindex="-1" aria-hidden="true" style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0">
+
+  <h3 class="hh">화면</h3>
+  <label>노드 모양
+    <select id="s_shape"><option value="rect">사각형</option><option value="circle">원형</option></select>
+  </label>
+  <label>캔버스 바깥 여백 (px)
+    <input type="number" id="s_canvasPadding" min="0" max="1000" step="20">
+  </label>
+  <div class="muted">그래프 주위에 확보할 빈 작업 공간입니다. 전체 그래프 보기에도 포함됩니다.</div>
+
+  <h3 class="hh">색</h3>
+  <div class="cset"><span class="cl">기본 노드 색 (미착수 노드의 안쪽 색)</span>
+    <div class="crow"><input type="text" id="s_nodeColor" maxlength="7" placeholder="#ffffff"><span class="sw" id="sw_nodeColor"></span></div>
+    <div class="presets" id="p_nodeColor"></div></div>
+  <div class="cset"><span class="cl">배경 색</span>
+    <div class="crow"><input type="text" id="s_bgColor" maxlength="7" placeholder="#fafafa"><span class="sw" id="sw_bgColor"></span></div>
+    <div class="presets" id="p_bgColor"></div></div>
+  <div class="cset"><span class="cl">진행 상태 색</span>
+    <div class="muted">노드 테두리·상태 점·연결선에 쓰이고, 노드 안쪽은 이 색을 옅게 칠합니다. 미착수 노드의 안쪽은 위의 기본 노드 색입니다.</div>
+    <div id="statusColorList"></div>
+    <button id="btnStatusColorDefault" type="button">상태 색 기본값으로</button></div>
+
+  <h3 class="hh">연결선</h3>
+  <label>연결선 모양
+    <select id="s_lineStyle"><option value="curve">곡선</option><option value="straight">직선</option></select>
+  </label>
+  <label>화살촉 크기 (px)
+    <input type="number" id="s_arrowSize" min="4" max="60" step="1">
+  </label>
+  <label>줄 굵기 (px)
+    <input type="number" id="s_lineWidth" min="0.5" max="10" step="0.5">
+  </label>
+  <label style="display:flex;align-items:center;gap:6px;margin-top:10px"><input type="checkbox" id="s_allowMutualEdges"> A↔B 양방향 연결 허용</label>
+  <div class="muted">끄면 A에서 B로 연결된 상태에서 B에서 A로의 화살표 연결을 막습니다. 켜면 서로 연결되는 화살표를 만들 수 있지만 선이 복잡해집니다.</div>
+
+  <h3 class="hh">그래프 파일 (JSON)</h3>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <label class="btn">JSON 불러오기<input type="file" id="file" accept=".json"></label>
+    <button id="btnSave">JSON 저장</button>
+  </div>
+
+  <h3 class="hh">데이터 폴더</h3>
+  <div class="muted" id="dataFolderHelp"></div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px"><button id="btnDataFolderPick" type="button">폴더 고르기</button><button id="btnFolderAllow" type="button" hidden>폴더 다시 허용</button><button id="btnDataFolderDefault" type="button">폴더 연결 끊기</button></div>
+  <div id="dataFolderStatus" class="muted" style="margin-top:6px;word-break:break-all"></div>
+
+  <div class="dlg-foot"><button id="btnSettingsDefault" type="button">설정 기본값으로</button><button id="btnSetClose" type="button">닫기</button></div>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

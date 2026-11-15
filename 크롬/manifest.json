@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "인과 편집기",
-  "version": "0.26.0",
+  "version": "0.27.0",
   "description": "원인과 결과를 노드와 화살표로 그리는 편집기. 서버 없이 브라우저나 연결한 폴더에 저장합니다.",
   "action": {"default_title": "인과 편집기 열기"},
-  "background": {"service_worker": "프로그램/background.js"},
+  "background": {"service_worker": "background.js"},
   "permissions": ["unlimitedStorage"],
-  "icons": {"16": "프로그램/icons/icon16.png", "48": "프로그램/icons/icon48.png", "128": "프로그램/icons/icon128.png"}
+  "icons": {"16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png"}
 }
