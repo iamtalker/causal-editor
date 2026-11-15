@@ -7,6 +7,7 @@
 <title>인과 편집기</title>
 <script src="md-graph.js"></script>
 <script src="storage.js"></script>
+<script src="drive.js"></script>
 <style>
   /* 디자인 토큰: 무채색 바탕에 잉크색 한 가지, 포커스 표시에만 파란색을 씁니다 */
   :root{
@@ -271,6 +272,13 @@
     <label class="btn">JSON 불러오기<input type="file" id="file" accept=".json"></label>
     <button id="btnSave">JSON 저장</button>
   </div>
+
+  <h3 class="hh">구글 드라이브 동기화</h3>
+  <div class="muted">버튼을 누를 때만 내 구글 드라이브의 "인과편집기" 폴더로 노드 파일(.md)을 올리거나 받습니다. 이 앱이 만든 파일에만 접근합니다.</div>
+  <label class="muted" style="display:block;margin-top:6px">OAuth 클라이언트 ID (구글 클라우드 콘솔의 웹 애플리케이션)<input type="text" id="driveClientId" style="width:100%;box-sizing:border-box" autocomplete="off" spellcheck="false"></label>
+  <label class="muted" style="display:block;margin-top:6px">승인된 리디렉션 URI (위 클라이언트에 등록하세요)<input type="text" id="driveRedirect" readonly style="width:100%;box-sizing:border-box"></label>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px"><button id="btnDrivePush" type="button">드라이브에 올리기</button><button id="btnDrivePull" type="button">드라이브에서 받기</button><button id="btnDriveLogout" type="button">로그인 정보 지우기</button></div>
+  <div id="driveStatus" class="muted" style="margin-top:6px;word-break:break-all"></div>
 
   <h3 class="hh">데이터 폴더</h3>
   <div class="muted" id="dataFolderHelp"></div>

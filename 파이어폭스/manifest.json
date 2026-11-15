@@ -1,17 +1,33 @@
 {
   "manifest_version": 3,
   "name": "인과 편집기",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "description": "원인과 결과를 노드와 화살표로 그리는 편집기. 서버 없이 브라우저에 저장합니다.",
-  "action": {"default_title": "인과 편집기 열기"},
-  "background": {"scripts": ["background.js"]},
-  "permissions": ["unlimitedStorage"],
-  "icons": {"16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png"},
+  "action": {
+    "default_title": "인과 편집기 열기"
+  },
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "permissions": [
+    "unlimitedStorage", "identity"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "causal-editor@iamtalker.github.io",
       "strict_min_version": "140.0",
-      "data_collection_permissions": {"required": ["none"]}
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
     },
     "gecko_android": {
       "strict_min_version": "142.0"
