@@ -127,7 +127,7 @@ async function redo() {
    브라우저(localStorage)에는 설정만 보관합니다(cacheSettings). 그래프 내용은 브라우저에 복사하지 않습니다.
    편집하면 save()가 설정을 바로 캐시하고, 400ms 뒤 persistNow()가 md → JSON 순서로 한 번에 저장합니다. */
 function cacheSettings() { try { localStorage.setItem(KEY, JSON.stringify({settings: S.settings})); } catch (e) {} }
-let persistTimer = null, persistChain = Promise.resolve();
+let persistTimer = null, persistChain = Promise.resolve(), persistBusy = 0;
 function schedulePersist() { clearTimeout(persistTimer); persistTimer = setTimeout(persistNow, 400); }
 // 저장은 항상 순서대로 한 번에 하나씩 실행하고, 실행 시점의 최신 그래프를 저장합니다.
 function persistNow() {
@@ -136,9 +136,12 @@ function persistNow() {
   return persistChain;
 }
 async function doPersist() {
-  cacheSettings();
-  await syncNodeFiles();
-  await persistGraph(S);
+  persistBusy++;
+  try {
+    cacheSettings();
+    await syncNodeFiles();
+    await persistGraph(S);
+  } finally { persistBusy--; }
 }
 // 탭을 닫거나 숨길 때, 아직 저장 전인 편집이 있으면 노드 파일을 바로 저장합니다.
 window.addEventListener('pagehide', () => {
@@ -238,7 +241,8 @@ async function loadSavedGraph(localData) {
 
 // 파일을 다시 읽어 화면을 맞춥니다. 편집 직후나 드래그 중에는 건너뜁니다.
 async function reloadFromNodeFiles(manual = false) {
-  if (drag || pan || Date.now() - lastEditAt < 1500) return;
+  // 저장 대기·진행 중에 읽으면 방금 고친 내용을 덜 쓴 파일로 덮어쓸 수 있어서 건너뜁니다
+  if (drag || pan || persistTimer !== null || persistBusy > 0 || Date.now() - lastEditAt < 1500) return;
   let files;
   try { files = await fetchNodeFiles(); }
   catch (err) { if (manual) setFstat(`파일 다시 읽기 실패: ${err.message}`); return; }
@@ -283,8 +287,19 @@ async function applyGraph(data) {
   await persistNow();
   select(null, null); renderSettings(); fitView();
 }
-const node = id => S.nodes.find(n => n.id === id);
-const edge = id => S.edges.find(e => e.id === id);
+// id로 노드·화살표를 찾습니다. 그릴 때마다 수백~수천 번 부르므로 목록을 훑지 않고 id 표를 씁니다.
+// 표는 목록(배열)이 바뀌거나 개수가 달라질 때만 다시 만듭니다. 노드·화살표를 더하고 빼는 코드는 모두 새 배열을 만들거나 개수를 바꿉니다.
+const idIndexes = {nodes: {arr: null, len: -1, map: null}, edges: {arr: null, len: -1, map: null}};
+function lookup(kind, arr, id) {
+  const c = idIndexes[kind];
+  if (c.arr !== arr || c.len !== arr.length) {
+    c.arr = arr; c.len = arr.length; c.map = new Map();
+    for (const x of arr) if (!c.map.has(x.id)) c.map.set(x.id, x);   // 같은 id가 있으면 먼저 나온 것 (find와 같은 결과)
+  }
+  return c.map.get(id);
+}
+const node = id => lookup('nodes', S.nodes, id);
+const edge = id => lookup('edges', S.edges, id);
 function normalizeNodeStatuses() {
   for (const n of S.nodes || []) {
     if (!NODE_STATUSES[n.status]) n.status = 'not_started';
@@ -297,9 +312,36 @@ function normalizeNodeStatuses() {
     delete e.label;
   }
 }
+// 불러온 그래프(JSON, 버전 파일)가 사람 손을 거쳤거나 깨져 있어도 화면이 멈추지 않게 값을 고칩니다.
+// 같은 id의 중복 노드·화살표는 먼저 것만 남기고, 없는 노드를 가리키는 화살표와 숫자가 아닌 위치는 바로잡습니다.
+function sanitizeGraph() {
+  const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
+  const seen = new Set();
+  S.nodes = (Array.isArray(S.nodes) ? S.nodes : []).filter(n => {
+    if (!n || n.id == null || n.id === '') return false;
+    n.id = String(n.id);
+    if (seen.has(n.id)) return false;
+    seen.add(n.id);
+    n.title = String(n.title ?? ''); n.memo = String(n.memo ?? '');
+    n.x = num(n.x, 60); n.y = num(n.y, 60);
+    return true;
+  });
+  const eseen = new Set();
+  S.edges = (Array.isArray(S.edges) ? S.edges : []).filter(e => {
+    if (!e || e.from == null || e.to == null) return false;
+    e.from = String(e.from); e.to = String(e.to);
+    if (!seen.has(e.from) || !seen.has(e.to)) return false;
+    if (e.id == null || e.id === '' || eseen.has(String(e.id))) e.id = `e_${e.from}_${e.to}_${eseen.size}`;
+    e.id = String(e.id);
+    if (eseen.has(e.id)) return false;
+    eseen.add(e.id);
+    e.memo = String(e.memo ?? '');
+    return true;
+  });
+}
 // 시작·종료는 화살표가 아니라 진행 상태(시작/종료)로 직접 정합니다.
 // 불러온 그래프를 쓰기 전에 상태값과 설정을 보정합니다 (불러오는 모든 경로에서 같은 순서로 호출).
-function prepareState() { normalizeNodeStatuses(); ensureSettings(); }
+function prepareState() { sanitizeGraph(); normalizeNodeStatuses(); ensureSettings(); }
 function nodeKind(n) {
   if (n.status === 'start') return 'start';
   if (n.status === 'end') return 'goal';
@@ -343,11 +385,12 @@ function visibleSets() {
     visibleNodeIds.clear();
     visibleEdgeIds.clear();
     visibleNodeIds.add(focusNodeId);
+    const outEdges = new Map();   // 노드 -> 나가는 화살표 (노드마다 전체 화살표를 훑지 않으려고 미리 모읍니다)
+    for (const e of S.edges) pushTo(outEdges, e.from, e);
     const queue = [focusNodeId];
     for (let i = 0; i < queue.length; i++) {
       const currentId = queue[i];
-      for (const e of S.edges) {
-        if (e.from !== currentId) continue;
+      for (const e of outEdges.get(currentId) || []) {
         visibleEdgeIds.add(e.id);
         focusPathEdgeIds.add(e.id);
         if (!visibleNodeIds.has(e.to)) {
@@ -365,13 +408,14 @@ function visibleSets() {
   } else if (connActive()) {
     visibleNodeIds.clear();
     visibleEdgeIds.clear();
+    const around = new Map();   // 노드 -> 이웃 노드 (원인·결과 모두)
+    for (const e of S.edges) { pushTo(around, e.from, e.to); pushTo(around, e.to, e.from); }
     const dist = new Map([[connNodeId, 0]]), queue = [connNodeId];
     for (let i = 0; i < queue.length; i++) {
       const u = queue[i], d = dist.get(u);
       if (d >= connDepth) continue;
-      for (const e of S.edges) {
-        const v = e.from === u ? e.to : (e.to === u ? e.from : null);
-        if (v === null || dist.has(v) || !node(v)) continue;
+      for (const v of around.get(u) || []) {
+        if (dist.has(v) || !node(v)) continue;
         dist.set(v, d + 1);
         queue.push(v);
       }
@@ -398,9 +442,11 @@ function render() {
   const focusOffsets = new Map();
   if (focusMode && focusNodeId) {
     const focusedEdges = S.edges.filter(e => visibleEdgeIds.has(e.id));
+    const outBy = new Map(), inBy = new Map();   // 노드마다 전체를 훑지 않고 한 번에 나눕니다
+    for (const e of focusedEdges) { pushTo(outBy, e.from, e); pushTo(inBy, e.to, e); }
     for (const n of S.nodes) {
-      const outgoing = focusedEdges.filter(e => e.from === n.id);
-      const incoming = focusedEdges.filter(e => e.to === n.id);
+      const outgoing = outBy.get(n.id) || [];
+      const incoming = inBy.get(n.id) || [];
       const assignOffsets = (edges, key) => edges.forEach((e, i) => {
         const spacing = Math.min(14, 70 / Math.max(1, edges.length - 1));
         const offset = (i - (edges.length - 1) / 2) * spacing;
@@ -418,6 +464,7 @@ function render() {
     if (!visibleEdgeIds.has(e.id)) continue;
     let out = '';
     const a = node(e.from), b = node(e.to);
+    if (!a || !b) continue;   // 없는 노드를 가리키는 화살표 때문에 화면 전체가 멈추지 않게 건너뜁니다
     // 선택한 노드에 들어오거나 나가는 선은 검정으로 강조하고, 다른 선 위에 그립니다
     const hot = sel.type === 'node' && (e.from === sel.id || e.to === sel.id);
     const edgeDim = isDimmedByStatus(a) || isDimmedByStatus(b);
@@ -444,7 +491,7 @@ function render() {
     const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 8;
     const edgeMemoSummary = e.memo ? titleLines(e.memo, 14, 1)[0] : '';
     if (edgeMemoSummary && !compactView) out += `<text x="${mx}" y="${my}" font-size="11" fill="#4b5563" text-anchor="middle" paint-order="stroke" stroke="${st.bgColor}" stroke-width="4" pointer-events="none"><title>${esc(e.memo)}</title>${esc(edgeMemoSummary)}</text>`;
-    out += `<path d="${d}" fill="none" stroke="transparent" stroke-width="14" data-edge="${e.id}" style="cursor:pointer"/></g>`;
+    out += `<path d="${d}" fill="none" stroke="transparent" stroke-width="14" data-edge="${esc(e.id)}" style="cursor:pointer"/></g>`;
     if (hot) hotOut += out; else h += out;
   }
   h += hotOut;
@@ -475,7 +522,7 @@ function render() {
         <circle cx="16" cy="88" r="3.5" fill="${status.color}"/>
         <text x="26" y="92" font-size="11" fill="#6b7280">${status.label}</text>`;
     }
-    h += `<g data-node="${n.id}" transform="translate(${n.x},${n.y})" style="cursor:move" opacity="${isDimmedByStatus(n) ? 0.25 : 1}">${body}</g>`;
+    h += `<g data-node="${esc(n.id)}" transform="translate(${n.x},${n.y})" style="cursor:move" opacity="${isDimmedByStatus(n) ? 0.25 : 1}">${body}</g>`;
   }
   // 캔버스 크기: 노드가 모두 들어갈 만큼 키우고, 확대/축소 비율을 적용
   const padding = Math.max(0, Math.min(1000, Number(st.canvasPadding) || 0));
@@ -751,7 +798,9 @@ function addEdge(a, b) {
     return;
   }
   if (!exists) {
-    const newEdge = {id: 'e' + S.nextId++, from: a, to: b, memo: ''};
+    let newId;
+    do { newId = 'e' + S.nextId++; } while (edge(newId));   // 불러온 화살표가 이미 같은 id를 쓰고 있으면 건너뜁니다
+    const newEdge = {id: newId, from: a, to: b, memo: ''};
     S.edges.push(newEdge);
     if (focusMode && (focusCreatedNodeIds.has(a) || focusCreatedNodeIds.has(b))) focusCreatedEdgeIds.add(newEdge.id);
     save();
@@ -789,10 +838,11 @@ function enumeratePaths(limit) {
   const starts = startNodes().map(n => n.id), targets = new Set(goalNodes().map(n => n.id));
   if (!starts.length || !targets.size) return [];
   const out = [];
+  let budget = 200000;                    // 탐색 횟수 상한: 경로가 지수적으로 많은 그래프에서 저장할 때마다 멈추는 것을 막습니다
   for (const s of starts) {
     const vis = new Set([s]);
     (function go(u, path) {               // path: 화살표 id 목록
-      if (out.length >= limit) return;
+      if (out.length >= limit || --budget < 0) return;
       if (targets.has(u)) { out.push([...path]); return; }
       for (const eid of adj.get(u) || []) {
         const v = edge(eid).to;
@@ -838,7 +888,7 @@ const storeLabel = () => Store.state.mode === 'folder' ? `폴더(${Store.state.f
 
 async function syncNodeFiles() {
   if (mdReadFailed) return;   // md를 못 읽은 상태에서 쓰면 기존 노드 파일이 지워질 수 있습니다
-  const files = S.nodes.map(n => ({name: fileName(n), text: nodeMd(n)}));
+  const files = NodeMd.toNodeFiles(S);
   files.push({name: '_경로.md', text: pathsMd()});
   try {
     const j = await Store.writeNodes(files);
@@ -1199,7 +1249,7 @@ function openInlineEditor(id, field = 'title') {
   const left = rect.left - sr.left + stage.scrollLeft + (n.x - viewMinX) * zoom;
   const top = rect.top - sr.top + stage.scrollTop + (n.y - viewMinY) * zoom;
   // 노드와 같은 크기·모양·색으로 덮고, 노드 좌표 그대로 배치한 뒤 확대율만큼 키웁니다 (확대·축소해도 어긋나지 않음)
-  const shapeEl = document.querySelector(`[data-node="${id}"] rect, [data-node="${id}"] circle`);
+  const shapeEl = document.querySelector(`[data-node="${CSS.escape(String(id))}"] rect, [data-node="${CSS.escape(String(id))}"] circle`);
   const fill = shapeEl?.getAttribute('fill') || '#ffffff';
   const stroke = shapeEl?.getAttribute('stroke') || '#000000';
   const sw = shapeEl?.getAttribute('stroke-width') || '3';
@@ -1569,7 +1619,7 @@ render(); renderPanel();
 // 자동 저장한 버전도 일반 버전과 같아서 버전 기록 창에서 복원·삭제할 수 있고, 자동으로 지우지는 않습니다.
 // 폴더를 연결한 상태면 버전이 폴더의 변경이력/에 파일로 남습니다(브라우저 저장만 쓸 때는 브라우저 안에만 남아 사이트 데이터를 지우면 함께 사라집니다).
 const AUTO_PREFIX = '자동 저장 ', AUTO_VERSION_KEY = 'causal-editor-auto-version', AUTO_HOURS_KEY = 'causal-editor-auto-hours';
-const AUTO_HOURS_DEFAULT = 24, AUTO_HOURS_MAX = 720;
+const AUTO_HOURS_DEFAULT = 24, AUTO_HOURS_MAX = 720, AUTO_KEEP = 300;   // 자동 저장 버전은 최근 300개만 남깁니다(직접 만든 버전은 지우지 않습니다)
 const autoVersionOn = () => { try { return localStorage.getItem(AUTO_VERSION_KEY) !== '0'; } catch (e) { return true; } };
 const autoHours = () => {
   let h = AUTO_HOURS_DEFAULT;
@@ -1577,6 +1627,16 @@ const autoHours = () => {
   return Math.min(AUTO_HOURS_MAX, Math.max(1, h));
 };
 let autoSaveBusy = false;
+// 버전 기록은 목록을 열 때 전부 메모리로 읽으므로, 짧은 간격으로 오래 쓰면 자동 저장 버전이 끝없이 쌓여 느려집니다. 가장 오래된 자동 저장부터 지웁니다.
+async function pruneAutoVersions() {
+  const old = VERSION_LIST.filter(v => String(v.summary).startsWith(AUTO_PREFIX)).slice(AUTO_KEEP);   // VERSION_LIST는 최신순
+  if (!old.length) return;
+  const gone = new Set();
+  for (const v of old) {
+    try { await Store.deleteVersion(v.id); gone.add(v.id); } catch (e) { break; }
+  }
+  if (gone.size) { VERSION_LIST = VERSION_LIST.filter(v => !gone.has(v.id)); if ($('#versionDlg').open) renderVersions(); }
+}
 async function maybeAutoSaveVersion() {
   if (!autoVersionOn() || autoSaveBusy || mdReadFailed || !S.nodes.length) return;
   if (Store.state.mode === 'folder' && !Store.state.folderReady) return;   // 폴더 권한이 없으면 건너뜁니다
@@ -1585,6 +1645,7 @@ async function maybeAutoSaveVersion() {
     const last = VERSION_LIST.find(v => String(v.summary).startsWith(AUTO_PREFIX));   // VERSION_LIST는 최신순
     if (!last || Date.now() - new Date(last.at).getTime() >= autoHours() * 60 * 60 * 1000) {
       await createVersion(AUTO_PREFIX + new Date().toLocaleString('sv-SE').slice(0, 16), S, false);
+      await pruneAutoVersions();
     }
   } finally { autoSaveBusy = false; }
 }

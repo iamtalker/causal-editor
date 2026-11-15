@@ -30,9 +30,25 @@ const NodeMd = (function () {
     return lines.slice(a, b).join('\n');
   }
 
-  // 노드 하나를 Markdown 문자열로 만듭니다. graph = {nodes, edges}
-  function toNodeMd(n, graph) {
+  // 메모 안의 줄이 "#"로 시작하면 파일을 읽을 때 제목·구역 표시(## 원인 등)로 오해해서 메모가 잘리거나 화살표가 생깁니다.
+  // 그래서 쓸 때 그런 줄 앞에 역슬래시를 하나 붙이고(\#), 읽을 때 하나 뗍니다. 이미 역슬래시로 시작하는 줄도 같은 규칙이라 그대로 돌아옵니다.
+  const escapeMemo = s => String(s).split('\n').map(l => (/^\\*#/.test(l) ? '\\' + l : l)).join('\n');
+  const unescapeMemo = s => s.split('\n').map(l => (/^\\+#/.test(l) ? l.slice(1) : l)).join('\n');
+
+  // 화살표를 노드별로 한 번에 모읍니다. 노드마다 전체 화살표를 훑지 않아서 노드가 많아도 빠릅니다.
+  function indexGraph(graph) {
     const byId = new Map(graph.nodes.map(x => [x.id, x]));
+    const incoming = new Map(), outgoing = new Map();
+    const add = (m, k, e) => { const a = m.get(k); if (a) a.push(e); else m.set(k, [e]); };
+    for (const e of graph.edges) {
+      if (!byId.has(e.from) || !byId.has(e.to)) continue;
+      add(incoming, e.to, e); add(outgoing, e.from, e);
+    }
+    return {byId, incoming, outgoing};
+  }
+
+  // 노드 하나를 Markdown 문자열로 만듭니다. graph = {nodes, edges}. 여러 노드를 만들 때는 index를 한 번 만들어 넘기면 빠릅니다.
+  function toNodeMd(n, graph, index = indexGraph(graph)) {
     const status = STATUS_LABEL[n.status] ? n.status : 'not_started';
     const x = Math.round(Number(n.x)) || 0, y = Math.round(Number(n.y)) || 0;
     const L = [
@@ -40,7 +56,7 @@ const NodeMd = (function () {
       `# ${n.title || DEFAULT_TITLE}`, '',
       '## 진행 상태', '', STATUS_LABEL[status], ''
     ];
-    if (n.memo) L.push('## 메모', '', n.memo, '');
+    if (n.memo) L.push('## 메모', '', escapeMemo(n.memo), '');
 
     const arrow = (e, other) => {
       const out = [`- [${other.title || DEFAULT_TITLE}](${encodeURI(fileName(other))})`];
@@ -50,16 +66,22 @@ const NodeMd = (function () {
       }
       return out;
     };
-    const incoming = graph.edges.filter(e => e.to === n.id && byId.has(e.from));
-    const outgoing = graph.edges.filter(e => e.from === n.id && byId.has(e.to));
+    const incoming = index.incoming.get(n.id) || [];
+    const outgoing = index.outgoing.get(n.id) || [];
 
     L.push('## 원인 (이 상태로 이어진 화살표)', '');
     if (!incoming.length) L.push('_없음_');
-    for (const e of incoming) L.push(...arrow(e, byId.get(e.from)));
+    for (const e of incoming) L.push(...arrow(e, index.byId.get(e.from)));
     L.push('', '## 결과 (이 상태에서 나가는 화살표)', '');
     if (!outgoing.length) L.push('_없음_');
-    for (const e of outgoing) L.push(...arrow(e, byId.get(e.to)));
+    for (const e of outgoing) L.push(...arrow(e, index.byId.get(e.to)));
     return L.join('\n') + '\n';
+  }
+
+  // 그래프의 모든 노드 파일 [{name, text}]을 한 번에 만듭니다.
+  function toNodeFiles(graph) {
+    const index = indexGraph(graph);
+    return graph.nodes.map(n => ({name: fileName(n), text: toNodeMd(n, graph, index)}));
   }
 
   // 앞머리(---)의 key: value 값을 읽고 본문을 돌려줍니다.
@@ -161,7 +183,7 @@ const NodeMd = (function () {
         title: titleOf(it.body, it.name.replace(/^n\d+_/, '').replace(/\.md$/, '').replace(/_/g, ' ') || DEFAULT_TITLE),
         x: Number.isFinite(x) ? x : NaN,
         y: Number.isFinite(y) ? y : NaN,
-        memo: trimBlankLines(findSection(secs, '메모') || []),
+        memo: unescapeMemo(trimBlankLines(findSection(secs, '메모') || [])),
         _out: parseArrows(findSection(secs, '결과')),
         _in: parseArrows(findSection(secs, '원인'))
       };
@@ -192,6 +214,6 @@ const NodeMd = (function () {
     };
   }
 
-  return {fileName, toNodeMd, parseNodeFiles, OWN_NODE_FILE, STATUS_LABEL, STATUS_KEY};
+  return {fileName, toNodeMd, toNodeFiles, parseNodeFiles, OWN_NODE_FILE, STATUS_LABEL, STATUS_KEY};
 })();
 if (typeof module !== 'undefined') module.exports = NodeMd;
