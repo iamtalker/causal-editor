@@ -29,14 +29,34 @@ const Drive = (function () {
     const id = clientId();
     if (!id) throw new Error('설정에서 구글 OAuth 클라이언트 ID를 먼저 입력하세요.');
     const x = ext();
-    if (!x || !x.identity || !x.identity.launchWebAuthFlow) throw new Error('이 브라우저에서는 구글 로그인을 쓸 수 없습니다.');
+    if (!x || !x.tabs || !x.identity) throw new Error('이 브라우저에서는 구글 로그인을 쓸 수 없습니다.');
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+    const redirect = redirectUrl();
     const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
-      client_id: id, redirect_uri: redirectUrl(), response_type: 'token', scope: SCOPE, state, include_granted_scopes: 'true'
+      client_id: id, redirect_uri: redirect, response_type: 'token', scope: SCOPE, state, include_granted_scopes: 'true'
     });
-    let result;
-    try { result = await x.identity.launchWebAuthFlow({url, interactive: true}); }
-    catch (e) { throw new Error('구글 로그인이 취소되었거나 실패했습니다. 클라이언트 ID와 리디렉션 URI 등록을 확인하세요.'); }
+    // 파이어폭스의 로그인 도우미(launchWebAuthFlow)는 구글의 마지막 이동을 놓치는 경우가 있어서, 일반 탭으로 로그인 창을 열고
+    // 어느 탭이든 리디렉션 주소로 이동하면 그 주소의 토큰을 직접 읽습니다.
+    const result = await new Promise((resolve, reject) => {
+      let loginTab = null, finished = false, timer = null;
+      const finish = (fn, value) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        x.tabs.onUpdated.removeListener(onUpdated);
+        x.tabs.onRemoved.removeListener(onRemoved);
+        fn(value);
+      };
+      const onUpdated = (tabId, change, tab) => {
+        const u = change.url || (tab && tab.url) || '';
+        if (u.startsWith(redirect)) { finish(resolve, u); Promise.resolve(x.tabs.remove(tabId)).catch(() => {}); }
+      };
+      const onRemoved = tabId => { if (tabId === loginTab) finish(reject, new Error('구글 로그인 창을 닫았습니다.')); };
+      x.tabs.onUpdated.addListener(onUpdated);
+      x.tabs.onRemoved.addListener(onRemoved);
+      timer = setTimeout(() => finish(reject, new Error('구글 로그인 시간이 지났습니다. 다시 시도하세요.')), 5 * 60 * 1000);
+      Promise.resolve(x.tabs.create({url})).then(t => { loginTab = t.id; }, () => finish(reject, new Error('구글 로그인 창을 열지 못했습니다.')));
+    });
     const q = new URLSearchParams(String(result).split('#')[1] || '');
     if (q.get('error')) throw new Error(`구글 로그인 오류: ${q.get('error')}`);
     if (q.get('state') !== state || !q.get('access_token')) throw new Error('구글 로그인 응답이 올바르지 않습니다.');
