@@ -690,10 +690,11 @@ function toggleConnMode() {
     if (focusMode) toggleFocusMode();
     connMode = true;
     connCreatedIds.clear();
-    connNodeId = sel.type === 'node' && node(sel.id) ? sel.id : null;
+    connNodeId = null;
+    sel = {type: null, id: null};   // 켜기 전에 선택해 둔 노드는 풀고, 연결을 볼 노드를 새로 고르게 합니다
     $('#btnConn').textContent = '연결 종료';
     $('#btnConn').setAttribute('aria-pressed', 'true');
-    setFstat(connNodeId ? `선택 노드와 연결된 노드를 ${connDepth}단계까지 표시합니다.` : '연결을 볼 노드를 선택하세요.');
+    setFstat('연결을 볼 노드를 선택하세요.');
   }
   render();
   renderPanel();
