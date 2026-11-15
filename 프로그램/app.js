@@ -794,76 +794,6 @@ async function syncNodeFiles() {
 
 /* ---------- 자동 정렬 · 화면 맞춤 ---------- */
 // 배열 본체. S.nodes와 S.edges가 배열할 범위를 가리키는 동안 실행합니다 (autoLayout이 맞춥니다).
-// 트리 정렬(탑다운·바텀업): 원인 노드 아래(탑다운)나 위(바텀업)에 결과 노드를 모아 배치합니다.
-// 아웃라이너처럼 부모가 자식들의 가운데에 오고, 형제들은 가로로 나란히 놓입니다.
-// 포커스 모드에서는 포커스 노드가 루트입니다. 한 노드가 여러 원인을 가지면 먼저 만난 원인 아래에만 배치하고, 나머지 화살표는 그대로 둡니다.
-function layoutTree(bottomUp) {
-  const W = dims().w, H = dims().h, COL = W + 40, ROW = H + 70;
-  const byId = new Map(S.nodes.map(n => [n.id, n]));
-  const kids = new Map(), hasIn = new Set();
-  for (const e of S.edges) {
-    if (!byId.has(e.from) || !byId.has(e.to)) continue;
-    pushTo(kids, e.from, e.to);
-    hasIn.add(e.to);
-  }
-  const byPosition = ids => ids.sort((a, b) => byId.get(a).y - byId.get(b).y || byId.get(a).x - byId.get(b).x);
-  let roots;
-  if (focusMode && focusNodeId && byId.has(focusNodeId)) roots = [focusNodeId];
-  else {
-    roots = startNodes().map(n => n.id);
-    if (!roots.length) roots = S.nodes.filter(n => !hasIn.has(n.id)).map(n => n.id);
-  }
-  const placed = new Set(), children = new Map(), depth = new Map();
-  const grow = (rootId) => {
-    placed.add(rootId);
-    depth.set(rootId, 0);
-    const queue = [rootId];
-    for (let i = 0; i < queue.length; i++) {
-      const u = queue[i];
-      for (const v of byPosition([...new Set(kids.get(u) || [])])) {
-        if (placed.has(v)) continue;
-        placed.add(v);
-        depth.set(v, depth.get(u) + 1);
-        pushTo(children, u, v);
-        queue.push(v);
-      }
-    }
-  };
-  for (const id of byPosition([...roots])) if (!placed.has(id)) grow(id);
-  // 루트에서 닿지 않는 노드(순환 등)는 따로 트리를 만듭니다.
-  for (const id of byPosition(S.nodes.map(n => n.id))) if (!placed.has(id)) grow(id);
-
-  // 아웃라이너처럼 한 줄에 노드 하나씩 위에서 아래로 쌓습니다. 깊이만큼 오른쪽으로 들여씁니다.
-  // 바텀업은 같은 순서를 아래에서 위로 쌓습니다.
-  const INDENT = 56;
-  const order = [];
-  const visit = (id) => { order.push(id); for (const c of children.get(id) || []) visit(c); };
-  const rootIds = [...new Set(S.nodes.map(n => n.id).filter(id => depth.get(id) === 0))];
-  for (const id of byPosition(rootIds)) visit(id);
-  // 종료 상태의 노드는 항상 맨 끝 줄에 모아서, 시작과 끝이 양 끝에 오게 합니다.
-  const goalSet = new Set(goalNodes().map(n => n.id));
-  const orderNoGoal = order.filter(id => !goalSet.has(id)), orderGoal = order.filter(id => goalSet.has(id));
-  order.length = 0;
-  order.push(...orderNoGoal, ...orderGoal);
-  const ROWGAP = 26;
-  const rowH = H + ROWGAP;
-  order.forEach((id, row) => {
-    const n = byId.get(id);
-    const r = bottomUp ? order.length - 1 - row : row;
-    n.x = Math.round(40 + depth.get(id) * INDENT);
-    n.y = Math.round(40 + r * rowH);
-  });
-}
-
-// 연결 많은 순 정렬: 화살표(들어오는 + 나가는)가 많은 노드부터 위에서 아래로 한 줄에 하나씩 쌓습니다. 연결이 없는 노드는 맨 끝에 둡니다.
-// 포커스 모드에서는 포커스로 보이는 노드끼리만 세고 배열합니다.
-function layoutRank() {
-  const ROW = dims().h + 26;
-  const ranked = rankedNodes().map(r => r.n), seen = new Set(ranked);
-  const rest = S.nodes.filter(n => !seen.has(n)).sort((a, b) => a.y - b.y || a.x - b.x);
-  [...ranked, ...rest].forEach((n, i) => { n.x = 40; n.y = Math.round(40 + i * ROW); });
-}
-
 function layoutNodes(mode) {
   const W = dims().w, H = dims().h, N = S.nodes.length;
   if (!N) return;
@@ -881,8 +811,6 @@ function layoutNodes(mode) {
   const maxL = Math.max(0, ...level.values());
   for (const n of S.nodes) if (!level.has(n.id)) level.set(n.id, maxL + 1);
   const goals = goalNodes();
-  if (mode === 'treeDown' || mode === 'treeUp') { layoutTree(mode === 'treeUp'); return; }
-  if (mode === 'rank') { layoutRank(); return; }
   if (mode === 'circle') {
     const R = Math.max(220, N * (Math.max(W, H) + 30) / (2 * Math.PI));
     const cx = R + W / 2 + 40, cy = R + H / 2 + 40;
@@ -907,66 +835,49 @@ function layoutNodes(mode) {
       n.x = Math.round(cx + R * Math.cos(t) - W / 2);
       n.y = Math.round(cy + R * Math.sin(t) - H / 2);
     });
-  } else if (mode === 'grid') {
-    if (!S.edges.length) {
-      const c = Math.ceil(Math.sqrt(N));
-      S.nodes.forEach((n, i) => { n.x = 40 + (i % c) * (W + 60); n.y = 40 + Math.floor(i / c) * (H + 60); });
-    } else {
-      const goalLevel = Math.max(0, ...level.values()) + 1;
-      for (const n of goals) level.set(n.id, goalLevel);
-      const cols = new Map();
-      for (const n of S.nodes) { const L = level.get(n.id); if (!cols.has(L)) cols.set(L, []); cols.get(L).push(n); }
-      for (const [L, list] of [...cols].sort((a, b) => a[0] - b[0])) {
-        list.sort((a, b) => a.y - b.y || a.x - b.x);
-        const centerY = 40 + (list.length - 1) * (H + 40) / 2;
-        list.forEach((n, i) => { n.x = 40 + L * (W + 80); n.y = centerY - (list.length - 1) * (H + 40) / 2 + i * (H + 40); });
-      }
-    }
   } else {
-    if ((mode === 'inversePyramid' || mode === 'diamond') && goals.length) { const goalLevel = Math.max(...level.values()) + 1; for (const g of goals) level.set(g.id, goalLevel); }
-    const maxLayoutLevel = Math.max(...level.values());
-    const cols = new Map();
-    for (const n of S.nodes) { const L = level.get(n.id); if (!cols.has(L)) cols.set(L, []); cols.get(L).push(n); }
-    const ordered = [...cols].sort((a, b) => a[0] - b[0]);
-    for (const [, list] of ordered) list.sort((a, b) => a.y - b.y || a.x - b.x);
-    if (mode === 'pyramid') {
-      const widest = Math.max(...ordered.map(([, list]) => list.length));
-      for (const [L, list] of ordered) {
-        const offset = (widest - list.length) * (W + 50) / 2;
-        list.forEach((n, i) => { n.x = 40 + offset + i * (W + 50); n.y = 40 + (maxLayoutLevel - L) * (H + 70); });
-      }
-    } else if (mode === 'inversePyramid') {
-      const widest = Math.max(...ordered.map(([, list]) => list.length));
-      for (const [L, list] of ordered) {
-        const offset = (widest - list.length) * (W + 50) / 2;
-        list.forEach((n, i) => { n.x = 40 + offset + i * (W + 50); n.y = 40 + L * (H + 70); });
-      }
-    } else if (mode === 'diamond') {
-      const widest = Math.max(...ordered.map(([, list]) => list.length));
-      const lastIndex = Math.max(1, ordered.length - 1);
-      const centerX = 40 + (widest - 1) * (W + 50) / 2;
-      let y = 40;
-      ordered.forEach(([, list], row) => {
-        const progress = row / lastIndex;
-        const widthFactor = 1 - Math.abs(2 * progress - 1);
-        const capacity = Math.max(1, Math.round(1 + (widest - 1) * widthFactor));
-        const subrowCount = Math.ceil(list.length / capacity);
-        for (let subrow = 0; subrow < subrowCount; subrow++) {
-          const items = list.slice(subrow * capacity, (subrow + 1) * capacity);
-          const span = items.length > 1 ? (capacity - 1) * (W + 50) : 0;
-          const left = centerX - span / 2;
-          items.forEach((n, i) => {
-            n.x = Math.round(left + (items.length > 1 ? i * span / (items.length - 1) : 0));
-            n.y = y + subrow * (H + 35);
-          });
-        }
-        y += subrowCount * (H + 35) + 55;
+    // 화살표 흐름 순서(시작 → 종료)로 노드를 한 줄로 세웁니다. 종료 노드는 맨 끝에 둡니다.
+    const goalIds = new Set(goals.map(g => g.id));
+    const lastLevel = Math.max(0, ...S.nodes.filter(n => !goalIds.has(n.id)).map(n => level.get(n.id)));
+    for (const g of goals) level.set(g.id, lastLevel + 1);
+    const flow = [...S.nodes].sort((a, b) => level.get(a.id) - level.get(b.id) || a.y - b.y || a.x - b.x);
+    const STEP_X = W + 50, STEP_Y = H + 40;
+    // 줄마다 놓을 노드 수(widths, 합이 노드 수)를 정해 두고 노드를 순서대로 채웁니다. 줄은 가운데 맞춤입니다.
+    const place = (nodes, widths) => {
+      const maxW = Math.max(...widths);
+      let i = 0;
+      widths.forEach((w, row) => {
+        const left = 40 + (maxW - w) * STEP_X / 2;
+        for (let c = 0; c < w && i < nodes.length; c++, i++) { nodes[i].x = Math.round(left + c * STEP_X); nodes[i].y = Math.round(40 + row * STEP_Y); }
       });
-    } else {
-      for (const [L, list] of ordered) {
-        const centerY = 40 + (list.length - 1) * (H + 40) / 2;
-        list.forEach((n, i) => { n.x = 40 + L * (W + 80); n.y = centerY - (list.length - 1) * (H + 40) / 2 + i * (H + 40); });
-      }
+    };
+    // 남는 노드 수(extra)를 order에 적은 줄부터 한 칸씩 더해 줍니다.
+    const spread = (widths, extra, order) => { for (let k = 0; k < extra; k++) widths[order[k % order.length]]++; return widths; };
+    // 피라미드 줄 폭: 위에서부터 1, 2, 3 … 개. 남는 노드는 아래쪽 줄에 한 개씩 더합니다.
+    const pyramidWidths = () => {
+      const m = Math.max(1, Math.floor((Math.sqrt(8 * N + 1) - 1) / 2));
+      const widths = Array.from({length: m}, (_, i) => i + 1);
+      return spread(widths, N - m * (m + 1) / 2, widths.map((_, i) => m - 1 - i));
+    };
+    if (mode === 'grid') {
+      // 정사각형에 가까운 격자. 시작이 왼쪽 위, 종료가 오른쪽 아래입니다.
+      const c = Math.ceil(Math.sqrt(N));
+      flow.forEach((n, i) => { n.x = 40 + (i % c) * (W + 60); n.y = 40 + Math.floor(i / c) * (H + 60); });
+    } else if (mode === 'pyramid') {
+      // 꼭대기가 종료, 아래쪽 넓은 줄이 시작입니다(흐름이 아래에서 위로).
+      const widths = pyramidWidths(), rev = [...flow].reverse(), seq = [];
+      let p = 0;
+      for (const w of widths) { seq.push(...rev.slice(p, p + w).reverse()); p += w; }   // 줄 안에서는 시작이 왼쪽에 오도록 뒤집습니다
+      place(seq, widths);
+    } else if (mode === 'inversePyramid') {
+      // 위쪽 넓은 줄이 시작, 아래쪽 뾰족한 끝이 종료입니다(흐름이 위에서 아래로).
+      place(flow, pyramidWidths().reverse());
+    } else if (mode === 'diamond') {
+      // 줄 폭: 1, 2, … k … 2, 1 개(다이아몬드). 남는 노드는 가운데 줄부터 한 개씩 더합니다.
+      const k = Math.max(1, Math.floor(Math.sqrt(N)));
+      const widths = [...Array.from({length: k}, (_, i) => i + 1), ...Array.from({length: k - 1}, (_, i) => k - 1 - i)];
+      const order = widths.map((_, i) => i).sort((x, y) => Math.abs(x - (k - 1)) - Math.abs(y - (k - 1)) || x - y);
+      place(flow, spread(widths, N - k * k, order));
     }
   }
 }
