@@ -231,7 +231,10 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (req.method === 'POST' && url === '/api/pick-folder') {
-    pickFolder().then(p => sendJson(res, 200, {ok: true, path: p || ''})).catch(err => sendJson(res, 500, {ok: false, error: err.message}));
+    console.log('폴더 고르기 창을 엽니다.');
+    pickFolder()
+      .then(p => { console.log('폴더 고르기 결과: ' + (p || '(취소)')); sendJson(res, 200, {ok: true, path: p || ''}); })
+      .catch(err => { console.log('폴더 고르기 실패: ' + err.message); sendJson(res, 500, {ok: false, error: err.message}); });
     return;
   }
   if (req.method === 'GET' && url === '/api/folder-info') {

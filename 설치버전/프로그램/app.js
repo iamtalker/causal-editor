@@ -1478,7 +1478,7 @@ async function connectFolder(chosen = null) {
   } catch (err) { alert(`폴더 연결 실패: ${err.message}`); await loadDataFolderSetting(); }
 }
 const disconnectFolder = () => connectFolder({name: '기본 폴더', path: ''});   // 기본 폴더로 되돌립니다. 기본 폴더에 노드 파일이 있으면 같은 방식으로 묻습니다.
-$('#btnDataFolderPick').onclick = connectFolder;
+$('#btnDataFolderPick').onclick = () => connectFolder();   // 클릭 이벤트가 connectFolder의 매개변수로 들어가지 않게 감쌉니다
 $('#btnFolderAllow').onclick = async () => {
   try {
     await Store.allowFolderAgain();
