@@ -856,7 +856,8 @@ function layoutNodes(mode) {
   // 화살표를 따라 시작 노드에서 계산한 단계. 정렬마다 좌우 또는 상하 흐름의 기준으로 씁니다.
   const adj = new Map(), hasIn = new Set();
   for (const e of S.edges) { pushTo(adj, e.from, e.to); hasIn.add(e.to); }
-  const roots = startNodes().length ? startNodes().map(n => n.id) : S.nodes.filter(n => !hasIn.has(n.id)).map(n => n.id);
+  // 단계 0은 "시작" 상태 노드와, 들어오는 화살표가 없는 노드(다른 사슬의 맨 앞 원인)입니다. 시작에서 닿지 않는 사슬의 원인도 시작 쪽에 놓이게 합니다.
+  const roots = [...new Set([...startNodes().map(n => n.id), ...S.nodes.filter(n => !hasIn.has(n.id)).map(n => n.id)])];
   const starts = roots.length ? roots : [S.nodes[0].id];
   const level = new Map(), q = [];
   for (const id of starts) { level.set(id, 0); q.push(id); }
@@ -867,38 +868,27 @@ function layoutNodes(mode) {
   const maxL = Math.max(0, ...level.values());
   for (const n of S.nodes) if (!level.has(n.id)) level.set(n.id, maxL + 1);
   const goals = goalNodes();
+  // 화살표 흐름 순서(시작 → 종료)로 노드를 한 줄로 세웁니다. 같은 단계 안에서는 진행 상태 순(시작·미착수 → … → 종료)으로, 종료 노드는 맨 끝에 둡니다.
+  // 모든 모양에서 방향이 같습니다: 시작이 위·왼쪽, 종료가 아래·오른쪽.
+  const goalIds = new Set(goals.map(g => g.id));
+  const lastLevel = Math.max(0, ...S.nodes.filter(n => !goalIds.has(n.id)).map(n => level.get(n.id)));
+  for (const g of goals) level.set(g.id, lastLevel + 1);
+  const statusRank = n => { const i = ['start', 'not_started', 'in_progress', 'completed', 'stopped', 'failed', 'end'].indexOf(n.status); return i < 0 ? 1 : i; };
+  const flow = [...S.nodes].sort((a, b) => level.get(a.id) - level.get(b.id) || statusRank(a) - statusRank(b) || a.y - b.y || a.x - b.x);
   if (mode === 'circle') {
+    // 시작은 왼쪽 위, 종료는 오른쪽 아래입니다. 둘 사이를 두 갈래 호(위·오른쪽을 지나는 호, 왼쪽·아래를 지나는 호)가 잇고,
+    // 흐름 순서대로 번갈아 두 호에 놓습니다. 그래서 어느 호에서도 시작에서 종료 쪽으로 갈수록 뒤쪽 단계가 됩니다.
     const R = Math.max(220, N * (Math.max(W, H) + 30) / (2 * Math.PI));
     const cx = R + W / 2 + 40, cy = R + H / 2 + 40;
-    const startIds = new Set(starts), goalIds = new Set(goals.map(n => n.id));
-    const circleSlots = Array.from({length: N}, (_, i) => i);
-    const slots = new Map();
-    const usedSlots = new Set();
-    const assignNear = (nodes, preferred) => nodes.forEach((n, i) => {
-      if (slots.has(n.id)) return;
-      const desired = preferred(i);
-      const slot = circleSlots.filter(candidate => !usedSlots.has(candidate)).sort((a, b) => Math.abs(a - desired) - Math.abs(b - desired))[0];
-      if (slot !== undefined) { slots.set(n.id, slot); usedSlots.add(slot); }
-    });
-    assignNear(starts.map(id => node(id)).filter(Boolean), i => i);
-    assignNear(goals, i => Math.floor(N / 2) + i);
-    const remainingSlots = circleSlots.filter(slot => !usedSlots.has(slot));
-    const others = S.nodes.filter(n => !startIds.has(n.id) && !goalIds.has(n.id)).sort((a, b) => level.get(a.id) - level.get(b.id) || a.y - b.y || a.x - b.x);
-    others.forEach((n, i) => slots.set(n.id, remainingSlots[i]));
-    S.nodes.forEach(n => {
-      const i = slots.get(n.id) ?? 0;
-      const t = -Math.PI / 2 + 2 * Math.PI * i / N;
-      n.x = Math.round(cx + R * Math.cos(t) - W / 2);
-      n.y = Math.round(cy + R * Math.sin(t) - H / 2);
+    const thStart = -3 * Math.PI / 4;
+    const arcSize = [Math.ceil(N / 2), Math.floor(N / 2)];
+    flow.forEach((n, i) => {
+      const arc = i % 2, r = Math.floor(i / 2);
+      const th = thStart + (arc === 0 ? 1 : -1) * (r + 0.5) / arcSize[arc] * Math.PI;
+      n.x = Math.round(cx + R * Math.cos(th) - W / 2);
+      n.y = Math.round(cy + R * Math.sin(th) - H / 2);
     });
   } else {
-    // 화살표 흐름 순서(시작 → 종료)로 노드를 한 줄로 세웁니다. 같은 단계 안에서는 진행 상태 순(시작·미착수 → … → 종료)으로, 종료 노드는 맨 끝에 둡니다.
-    // 모든 모양에서 방향이 같습니다: 시작이 위·왼쪽, 종료가 아래·오른쪽.
-    const goalIds = new Set(goals.map(g => g.id));
-    const lastLevel = Math.max(0, ...S.nodes.filter(n => !goalIds.has(n.id)).map(n => level.get(n.id)));
-    for (const g of goals) level.set(g.id, lastLevel + 1);
-    const statusRank = n => { const i = ['start', 'not_started', 'in_progress', 'completed', 'stopped', 'failed', 'end'].indexOf(n.status); return i < 0 ? 1 : i; };
-    const flow = [...S.nodes].sort((a, b) => level.get(a.id) - level.get(b.id) || statusRank(a) - statusRank(b) || a.y - b.y || a.x - b.x);
     const STEP_X = W + 50, STEP_Y = H + 40;
     // 줄마다 놓을 노드 수(widths, 합이 노드 수)를 정해 두고 노드를 순서대로 채웁니다. 줄은 가운데 맞춤입니다.
     const place = (nodes, widths) => {
@@ -933,6 +923,25 @@ function layoutNodes(mode) {
       const widths = [...Array.from({length: k}, (_, i) => i + 1), ...Array.from({length: k - 1}, (_, i) => k - 1 - i)];
       const order = widths.map((_, i) => i).sort((x, y) => Math.abs(x - (k - 1)) - Math.abs(y - (k - 1)) || x - y);
       place(flow, spread(widths, N - k * k, order));
+    }
+    // 같은 줄 안에서 (단계, 진행 상태)가 같은 노드끼리는 연결된 노드들의 위치 평균에 가깝게 순서를 바꿔, 선이 덜 얽히게 합니다.
+    // 단계와 진행 상태 순서는 그대로라서 방향(시작 → 종료, 미착수 → 종료)은 유지됩니다.
+    const nbr = new Map(), byId = new Map(S.nodes.map(n => [n.id, n]));
+    for (const e of S.edges) { pushTo(nbr, e.from, e.to); pushTo(nbr, e.to, e.from); }
+    const rows = new Map();
+    for (const n of S.nodes) pushTo(rows, n.y, n);
+    const rowList = [...rows.entries()].sort((a, b) => a[0] - b[0]).map(r => r[1]);
+    const bary = n => {
+      const xs = (nbr.get(n.id) || []).map(id => byId.get(id)).filter(m => m && m.y !== n.y).map(m => m.x);
+      return xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : n.x;
+    };
+    for (let sweep = 0; sweep < 4; sweep++) {
+      for (const row of (sweep % 2 ? [...rowList].reverse() : rowList)) {
+        const slots = row.map(n => n.x).sort((a, b) => a - b);
+        const keyed = row.map(n => ({n, l: level.get(n.id), s: statusRank(n), b: bary(n)}));
+        keyed.sort((p, q) => p.l - q.l || p.s - q.s || p.b - q.b || p.n.x - q.n.x);
+        keyed.forEach((k, i) => { k.n.x = slots[i]; });
+      }
     }
   }
 }
