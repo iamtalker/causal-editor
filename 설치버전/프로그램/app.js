@@ -834,7 +834,7 @@ function download(name, text, type) {
 
 /* 노드 파일 자동 저장: 저장소(storage.js)가 브라우저나 연결한 폴더 중 현재 방식에 씁니다. */
 const setFstat = t => { $('#fstat').textContent = t; };
-const storeLabel = () => Store.state.mode === 'folder' ? `폴더(${Store.state.folderName})` : '브라우저 저장';
+const storeLabel = () => `폴더(${Store.state.folderName})`;
 
 async function syncNodeFiles() {
   if (mdReadFailed) return;   // md를 못 읽은 상태에서 쓰면 기존 노드 파일이 지워질 수 있습니다
@@ -1443,20 +1443,15 @@ $('#versionList').addEventListener('click', async e => {
   }
 });
 $('#btnSetClose').onclick = () => $('#setDlg').close();
-/* 데이터 폴더 설정. 폴더를 연결하는 즉시 폴더가 원본이 되고, 연결을 끊으면 브라우저 저장으로 돌아옵니다. */
+/* 데이터 폴더 설정. 노드 파일(.md)·내부데이터·변경이력은 항상 이 폴더에 저장됩니다. 기본은 설치버전 폴더이고, 다른 폴더로 바꿀 수 있습니다. */
 async function loadDataFolderSetting() {
   const st = Store.state;
-  $('#btnFolderAllow').hidden = st.mode !== 'folder' || st.folderReady;
-  $('#btnDataFolderPick').disabled = !Store.folderSupported;
-  $('#btnDataFolderPick').textContent = st.mode === 'folder' ? '다른 폴더 고르기' : '폴더 고르기';
-  $('#btnDataFolderDefault').hidden = st.mode !== 'folder';
-  $('#btnDataFolderDefault').textContent = '폴더 연결 끊기';
-  $('#dataFolderHelp').textContent = Store.folderSupported
-    ? '기본은 이 브라우저에 저장합니다. 폴더를 연결하면 노드 파일(.md)·내부데이터·변경이력을 그 폴더에 만들고, 폴더가 원본이 됩니다. 브라우저의 사이트 데이터를 지우면 브라우저 저장은 사라지니, 중요한 그래프는 폴더를 연결하거나 JSON으로 저장해 두세요.'
-    : '이 브라우저에는 폴더 저장 기능이 없어 브라우저에 저장합니다(폴더 저장은 크롬·엣지에서 됩니다). 브라우저의 사이트 데이터를 지우면 사라지니 JSON으로 자주 저장해 두세요.';
-  $('#dataFolderStatus').textContent = st.mode === 'folder'
-    ? `폴더 연결됨: ${st.folderName}${st.folderReady ? '' : ' (접근 권한 확인이 필요합니다. "폴더 다시 허용"을 누르세요)'}`
-    : '현재 사용 중: 이 브라우저(IndexedDB)';
+  $('#btnFolderAllow').hidden = true;
+  $('#btnDataFolderPick').textContent = '폴더 바꾸기';
+  $('#btnDataFolderDefault').hidden = !st.custom;
+  $('#btnDataFolderDefault').textContent = '기본 폴더로';
+  $('#dataFolderHelp').textContent = '노드 파일(.md)·내부데이터·변경이력이 이 폴더에 저장됩니다. 구글 드라이브, 원드라이브, 싱크싱 같은 동기화 폴더를 고르면 여러 컴퓨터에서 같은 그래프를 쓸 수 있습니다.';
+  $('#dataFolderStatus').textContent = `데이터 폴더: ${st.folderPath || '(확인 중)'}${st.custom ? '' : ' (기본)'}`;
 }
 // 저장 방식이 바뀐 뒤 화면을 새 저장소 기준으로 맞춥니다.
 async function afterStoreChange(loadFromStore) {
@@ -1464,10 +1459,12 @@ async function afterStoreChange(loadFromStore) {
   try { await loadVersions(); renderVersions(); } catch (err) { VERSION_LIST = []; setFstat(`변경 이력을 읽지 못했습니다: ${err.message}`); }
   await loadDataFolderSetting();
 }
-async function connectFolder() {
-  let handle;
-  try { handle = await Store.pickFolder(); }
-  catch (err) { if (err && err.name !== 'AbortError') alert(`폴더를 열지 못했습니다: ${err.message}`); return; }
+async function connectFolder(chosen = null) {
+  let handle = chosen;
+  if (!handle) {
+    try { handle = await Store.pickFolder(); }
+    catch (err) { if (err && err.name !== 'AbortError') alert(`폴더를 열지 못했습니다: ${err.message}`); return; }
+  }
   try {
     const n = await Store.countNodeFiles(handle);
     let load = false;
@@ -1480,11 +1477,7 @@ async function connectFolder() {
     setFstat(load ? `폴더에서 불러왔습니다: ${handle.name}` : `폴더에 저장을 시작했습니다: ${handle.name}`);
   } catch (err) { alert(`폴더 연결 실패: ${err.message}`); await loadDataFolderSetting(); }
 }
-async function disconnectFolder() {
-  if (!confirm('폴더 연결을 끊고 이 브라우저에 저장할까요?\n지금 화면의 그래프가 브라우저 저장에 복사되고, 폴더의 파일은 그대로 남습니다.')) return;
-  try { await Store.disconnectFolder(); await afterStoreChange(false); setFstat('폴더 연결을 끊고 브라우저에 저장합니다.'); }
-  catch (err) { alert(`연결을 끊지 못했습니다: ${err.message}`); }
-}
+const disconnectFolder = () => connectFolder({name: '기본 폴더', path: ''});   // 기본 폴더로 되돌립니다. 기본 폴더에 노드 파일이 있으면 같은 방식으로 묻습니다.
 $('#btnDataFolderPick').onclick = connectFolder;
 $('#btnFolderAllow').onclick = async () => {
   try {
@@ -1504,7 +1497,7 @@ async function importGraphFile(text, fileName = '') {
   if (!Array.isArray(o.nodes) && o.data && Array.isArray(o.data.nodes)) o = o.data;   // 버전 파일
   if (!Array.isArray(o.nodes)) throw new Error('인과 편집기의 그래프 JSON이 아닙니다.');
   if (S.nodes.length) {
-    const where = Store.state.mode === 'folder' ? `연결한 폴더(${Store.state.folderName})의 노드 파일이 모두 이 내용으로 덮어써집니다` : '이 브라우저에 저장된 그래프가 이 내용으로 바뀝니다';
+    const where = `데이터 폴더(${Store.state.folderName})의 노드 파일이 모두 이 내용으로 덮어써집니다`;
     const msg = `${fileName ? `“${fileName}”으로 ` : ''}그래프를 바꿀까요?\n\n현재: 노드 ${S.nodes.length}개 · 화살표 ${S.edges.length}개\n불러올 내용: 노드 ${o.nodes.length}개 · 화살표 ${(o.edges || []).length}개\n\n${where}.\n되돌리려면 먼저 "버전 기록"에서 현재 상태를 저장해 두세요.`;
     if (!confirm(msg)) return;
   }
@@ -1600,25 +1593,14 @@ $('#autoHours').addEventListener('change', e => {
   try { localStorage.setItem(AUTO_HOURS_KEY, String(h)); } catch (err) {}
   maybeAutoSaveVersion().catch(() => {});
 });
-const FOLDER_TIP_KEY = 'causal-editor-folder-tip-v1';
-function maybeShowFolderTip() {
-  if (Store.state.mode !== 'browser' || !Store.folderSupported) return;
-  try { if (localStorage.getItem(FOLDER_TIP_KEY)) return; } catch (e) { /* 저장소를 못 읽으면 안내만 보여 줍니다 */ }
-  $('#folderTipDlg').showModal();
-  try { localStorage.setItem(FOLDER_TIP_KEY, '1'); } catch (e) { /* 기록하지 못하면 다음에도 보여 줍니다 */ }   // 한 번 보여 주면 어떻게 닫아도 다시 묻지 않습니다
-}
-$('#btnTipLater').onclick = () => $('#folderTipDlg').close();
-$('#btnTipConnect').onclick = async () => { $('#folderTipDlg').close(); await connectFolder(); };
 setInterval(() => maybeAutoSaveVersion().catch(() => {}), 10 * 60 * 1000);   // 오래 켜 둔 탭에서도 정한 시간이 지나면 만듭니다
 document.addEventListener('visibilitychange', () => { if (!document.hidden) maybeAutoSaveVersion().catch(() => {}); });
 
 Store.init().then(() => {
-  if (Store.state.mode === 'browser' && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});   // 브라우저가 저장 공간을 임의로 비우지 않도록 요청
   loadDataFolderSetting();
   loadVersions().then(() => { renderVersions(); }).catch(err => setFstat(`변경 이력을 읽지 못했습니다: ${err.message}`));
   return loadSavedGraph(browserData);
 }).then(async () => {
   try { await loadVersions(); renderVersions(); } catch (e) { /* 위에서 이미 안내합니다 */ }
   await maybeAutoSaveVersion();
-  maybeShowFolderTip();
 }).catch(err => setFstat(`그래프를 읽지 못했습니다: ${err.message}`));
