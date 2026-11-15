@@ -47,8 +47,8 @@ const svg = $('#canvas');
 
 let S, sel = {type: null, id: null}, drag = null, pan = null, pendingConnectionSource = null;
 let focusMode = false, focusNodeId = null;
-// 연결 모드: 선택한 노드(connNodeId)와 연결된 노드만 connDepth 단계까지 보여 줍니다(방향은 따지지 않습니다). 화면 설정이라 파일에는 저장하지 않습니다.
-let connMode = false, connNodeId = null, connDepth = 1, connKeepCenter = false;
+// 연결 모드: 처음 선택한 노드(connNodeId)를 중심으로 고정하고, 연결된 노드만 connDepth 단계까지 보여 줍니다(방향은 따지지 않습니다). 화면 설정이라 파일에는 저장하지 않습니다.
+let connMode = false, connNodeId = null, connDepth = 1;
 const connCreatedIds = new Set();
 // 상태 보기: 선택한 상태가 아닌 노드와 그 화살표를 흐리게 표시합니다. 화면 보기 설정이라 파일에 저장하지 않습니다.
 let statusFilter = 'all';
@@ -577,7 +577,10 @@ function loadSidebarWidth() {
 
 function select(type, id) {
   sel = {type, id};
-  if (connMode && type === 'node' && !connKeepCenter) connNodeId = id;
+  if (connMode && type === 'node' && !connNodeId) {   // 처음 고른 노드가 중심으로 고정됩니다. 중심을 바꾸려면 연결 모드를 껐다 켭니다.
+    connNodeId = id;
+    setFstat(`선택 노드와 연결된 노드를 ${connDepth}단계까지 표시합니다. 중심을 바꾸려면 연결 모드를 껐다가 켜세요.`);
+  }
   if (focusMode && !focusNodeId && type === 'node') {
     focusNodeId = id;
     setFstat('선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다.');
@@ -655,6 +658,7 @@ function renderSearchResults() {
 }
 function goToSearchResult(id) {
   if (focusMode) toggleFocusMode();
+  if (connMode) toggleConnMode();
   setSidebarVisible(true, true);
   select('node', id);
   const n = node(id), stage = $('#stage'), rect = svg.getBoundingClientRect(), sr = stage.getBoundingClientRect();
@@ -734,8 +738,8 @@ function addNode(x, y) {
   const id = freeNodeId();
   S.nodes.push({id, status:'not_started', title:'새 노드', x: Math.max(0, x), y: Math.max(0, y), memo:''});
   if (focusMode) focusCreatedNodeIds.add(id);
-  if (connMode) { connCreatedIds.add(id); connKeepCenter = !!connNodeId; }   // 이미 중심 노드가 있으면 새 노드를 옆에 붙여 연결할 수 있게 중심을 옮기지 않습니다
-  save(); select('node', id); connKeepCenter = false;
+  if (connMode) connCreatedIds.add(id);   // 연결 모드 중 새로 만든 노드는 계속 보입니다
+  save(); select('node', id);
 }
 
 function addEdge(a, b) {
