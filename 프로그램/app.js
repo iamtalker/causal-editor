@@ -47,6 +47,9 @@ const svg = $('#canvas');
 
 let S, sel = {type: null, id: null}, drag = null, pan = null, pendingConnectionSource = null;
 let focusMode = false, focusNodeId = null;
+// 연결 모드: 선택한 노드(connNodeId)와 연결된 노드만 connDepth 단계까지 보여 줍니다(방향은 따지지 않습니다). 화면 설정이라 파일에는 저장하지 않습니다.
+let connMode = false, connNodeId = null, connDepth = 1, connKeepCenter = false;
+const connCreatedIds = new Set();
 // 상태 보기: 선택한 상태가 아닌 노드와 그 화살표를 흐리게 표시합니다. 화면 보기 설정이라 파일에 저장하지 않습니다.
 let statusFilter = 'all';
 let compactView = false;
@@ -102,6 +105,7 @@ async function restoreHistory(snapshot) {
   focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
   $('#btnFocus').textContent = '포커스 모드';
   $('#btnFocus').setAttribute('aria-pressed', 'false');
+  resetConnMode();
   historyCurrent = snapshotGraph(); historyGroup = null;
   await persistNow();
   render(); renderPanel(); renderSettings(); fitView(); updateHistoryButtons();
@@ -258,6 +262,7 @@ async function reloadFromNodeFiles(manual = false) {
   focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
   $('#btnFocus').textContent = '포커스 모드';
   $('#btnFocus').setAttribute('aria-pressed', 'false');
+  resetConnMode();
   await persistGraph(S);
   render(); renderPanel();
   setFstat(`노드 파일에서 다시 읽었습니다 (노드 ${g.nodes.length}개, 화살표 ${g.edges.length}개)`);
@@ -274,6 +279,7 @@ async function applyGraph(data) {
   focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
   $('#btnFocus').textContent = '포커스 모드';
   $('#btnFocus').setAttribute('aria-pressed', 'false');
+  resetConnMode();
   await persistNow();
   select(null, null); renderSettings(); fitView();
 }
@@ -328,6 +334,7 @@ function analyze() {
 /* ---------- 렌더링 ---------- */
 // 화면에 보이는 노드·화살표 범위. 포커스 모드이면 포커스 경로와 새로 만든 항목만 보입니다.
 // render()와 포커스 안에서의 자동 배열이 같이 씁니다.
+const connActive = () => connMode && connNodeId && !!node(connNodeId);
 function visibleSets() {
   const visibleNodeIds = new Set(S.nodes.map(n => n.id));
   const visibleEdgeIds = new Set(S.edges.map(e => e.id));
@@ -355,6 +362,23 @@ function visibleSets() {
       const e = edge(id);
       if (e && visibleNodeIds.has(e.from) && visibleNodeIds.has(e.to)) visibleEdgeIds.add(id);
     }
+  } else if (connActive()) {
+    visibleNodeIds.clear();
+    visibleEdgeIds.clear();
+    const dist = new Map([[connNodeId, 0]]), queue = [connNodeId];
+    for (let i = 0; i < queue.length; i++) {
+      const u = queue[i], d = dist.get(u);
+      if (d >= connDepth) continue;
+      for (const e of S.edges) {
+        const v = e.from === u ? e.to : (e.to === u ? e.from : null);
+        if (v === null || dist.has(v) || !node(v)) continue;
+        dist.set(v, d + 1);
+        queue.push(v);
+      }
+    }
+    for (const id of dist.keys()) visibleNodeIds.add(id);
+    for (const id of connCreatedIds) if (node(id)) visibleNodeIds.add(id);   // 연결 모드 중 새로 만든 노드는 계속 보입니다
+    for (const e of S.edges) if (visibleNodeIds.has(e.from) && visibleNodeIds.has(e.to)) visibleEdgeIds.add(e.id);
   }
   return {visibleNodeIds, visibleEdgeIds, focusPathEdgeIds};
 }
@@ -553,6 +577,7 @@ function loadSidebarWidth() {
 
 function select(type, id) {
   sel = {type, id};
+  if (connMode && type === 'node' && !connKeepCenter) connNodeId = id;
   if (focusMode && !focusNodeId && type === 'node') {
     focusNodeId = id;
     setFstat('선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다.');
@@ -652,15 +677,38 @@ $('#nodeSearch').addEventListener('keydown', e => {
 });
 document.addEventListener('mousedown', e => { if (!e.target.closest('.search-wrap')) $('#searchResults').hidden = true; });
 
+function resetConnMode() {
+  connMode = false; connNodeId = null; connCreatedIds.clear();
+  $('#btnConn').textContent = '연결 모드';
+  $('#btnConn').setAttribute('aria-pressed', 'false');
+}
+function toggleConnMode() {
+  if (connMode) {
+    resetConnMode();
+    setFstat('전체 그래프를 표시합니다.');
+  } else {
+    if (focusMode) toggleFocusMode();
+    connMode = true;
+    connCreatedIds.clear();
+    connNodeId = sel.type === 'node' && node(sel.id) ? sel.id : null;
+    $('#btnConn').textContent = '연결 종료';
+    $('#btnConn').setAttribute('aria-pressed', 'true');
+    setFstat(connNodeId ? `선택 노드와 연결된 노드를 ${connDepth}단계까지 표시합니다.` : '연결을 볼 노드를 선택하세요.');
+  }
+  render();
+  renderPanel();
+}
 function toggleFocusMode() {
   if (focusMode) {
     focusMode = false; focusNodeId = null;
     focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
     $('#btnFocus').textContent = '포커스 모드';
     $('#btnFocus').setAttribute('aria-pressed', 'false');
+  resetConnMode();
     setFstat('전체 그래프를 표시합니다.');
   } else {
     focusMode = true;
+    resetConnMode();
     focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
     sel = {type: null, id: null};
     focusNodeId = null;
@@ -685,7 +733,8 @@ function addNode(x, y) {
   const id = freeNodeId();
   S.nodes.push({id, status:'not_started', title:'새 노드', x: Math.max(0, x), y: Math.max(0, y), memo:''});
   if (focusMode) focusCreatedNodeIds.add(id);
-  save(); select('node', id);
+  if (connMode) { connCreatedIds.add(id); connKeepCenter = !!connNodeId; }   // 이미 중심 노드가 있으면 새 노드를 옆에 붙여 연결할 수 있게 중심을 옮기지 않습니다
+  save(); select('node', id); connKeepCenter = false;
 }
 
 function addEdge(a, b) {
@@ -716,6 +765,8 @@ function deleteSelected() {
     S.nodes = S.nodes.filter(x => x.id !== n.id);
     S.edges = S.edges.filter(e => e.from !== n.id && e.to !== n.id);
     focusCreatedNodeIds.delete(n.id);
+    connCreatedIds.delete(n.id);
+    if (connNodeId === n.id) connNodeId = null;
     for (const id of [...focusCreatedEdgeIds]) if (!edge(id)) focusCreatedEdgeIds.delete(id);
   } else return;
   if (deletedFocusNode) {
@@ -885,7 +936,7 @@ function layoutNodes(mode) {
 // 정렬 메뉴에서 고른 모양대로 배열합니다. 포커스 모드이면 포커스로 보이는 노드와 화살표만 배열합니다.
 function autoLayout(mode) {
   const allNodes = S.nodes, allEdges = S.edges;
-  if (focusMode && focusNodeId) {
+  if ((focusMode && focusNodeId) || connActive()) {
     const {visibleNodeIds, visibleEdgeIds} = visibleSets();
     S.nodes = allNodes.filter(n => visibleNodeIds.has(n.id));
     S.edges = allEdges.filter(e => visibleEdgeIds.has(e.id) && visibleNodeIds.has(e.from) && visibleNodeIds.has(e.to));
@@ -1335,6 +1386,8 @@ $('#stage').addEventListener('wheel', e => {
   stage.scrollTop = (worldY - viewMinY) * zoom - cy;
 }, {passive: false});
 $('#btnFocus').onclick = toggleFocusMode;
+$('#btnConn').onclick = toggleConnMode;
+$('#connDepth').onchange = e => { connDepth = Number(e.target.value) || 1; if (connActive()) setFstat(`연결된 노드를 ${connDepth}단계까지 표시합니다.`); render(); };
 $('#btnUndo').onclick = undo;
 $('#btnRedo').onclick = redo;
 $('#btnSidebar').onclick = () => setSidebarVisible($('aside').hidden, true);
