@@ -32,9 +32,7 @@
 
 ![상태를 고르고 검색창을 누르면 그 상태의 노드가 연결 많은 순서로 나옵니다](https://raw.githubusercontent.com/iamtalker/causal-editor/master/docs/screenshots/04-search-ranking.png)
 
-- **포커스 모드**로 한 노드에서 이어지는 경로만 따로 볼 수 있고, **트리 정렬**과 **간편 보기**를 함께 쓰면 한 줄로 이어진 흐름처럼 읽힙니다. 정렬 방식은 피라미드, 역피라미드, 다이아몬드, 원형, 격자, 트리, 연결 많은 순이 있습니다.
-
-![포커스 모드와 트리 정렬로 한 노드에서 이어지는 경로를 한 줄 흐름으로 봅니다](https://raw.githubusercontent.com/iamtalker/causal-editor/master/docs/screenshots/05-tree-focus.png)
+- **흐름 모드**로 한 노드에서 화살표 방향으로 이어지는 경로만 따로 볼 수 있고, **연결 모드**로 선택한 노드와 연결된 노드만(1~5단계) 볼 수 있습니다. **간편 보기**를 켜면 노드가 제목 한 줄짜리 작은 상자로 바뀝니다. 정렬 방식은 피라미드, 역피라미드, 다이아몬드, 원형, 격자가 있습니다.
 
 ## 색과 모양은 설정에서
 

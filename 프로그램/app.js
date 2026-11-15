@@ -103,7 +103,7 @@ async function restoreHistory(snapshot) {
   sel = {type:null, id:null};
   focusMode = false; focusNodeId = null;
   focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
-  $('#btnFocus').textContent = '포커스 모드';
+  $('#btnFocus').textContent = '흐름 모드';
   $('#btnFocus').setAttribute('aria-pressed', 'false');
   resetConnMode();
   historyCurrent = snapshotGraph(); historyGroup = null;
@@ -260,7 +260,7 @@ async function reloadFromNodeFiles(manual = false) {
   sel = {type: null, id: null};
   focusMode = false; focusNodeId = null;
   focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
-  $('#btnFocus').textContent = '포커스 모드';
+  $('#btnFocus').textContent = '흐름 모드';
   $('#btnFocus').setAttribute('aria-pressed', 'false');
   resetConnMode();
   await persistGraph(S);
@@ -277,7 +277,7 @@ async function applyGraph(data) {
   resetHistory();
   focusMode = false; focusNodeId = null;
   focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
-  $('#btnFocus').textContent = '포커스 모드';
+  $('#btnFocus').textContent = '흐름 모드';
   $('#btnFocus').setAttribute('aria-pressed', 'false');
   resetConnMode();
   await persistNow();
@@ -332,8 +332,8 @@ function analyze() {
 }
 
 /* ---------- 렌더링 ---------- */
-// 화면에 보이는 노드·화살표 범위. 포커스 모드이면 포커스 경로와 새로 만든 항목만 보입니다.
-// render()와 포커스 안에서의 자동 배열이 같이 씁니다.
+// 화면에 보이는 노드·화살표 범위. 흐름 모드이면 흐름 경로와 새로 만든 항목만 보입니다.
+// render()와 흐름 모드 안에서의 자동 배열이 같이 씁니다.
 const connActive = () => connMode && connNodeId && !!node(connNodeId);
 function visibleSets() {
   const visibleNodeIds = new Set(S.nodes.map(n => n.id));
@@ -702,7 +702,7 @@ function toggleFocusMode() {
   if (focusMode) {
     focusMode = false; focusNodeId = null;
     focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
-    $('#btnFocus').textContent = '포커스 모드';
+    $('#btnFocus').textContent = '흐름 모드';
     $('#btnFocus').setAttribute('aria-pressed', 'false');
   resetConnMode();
     setFstat('전체 그래프를 표시합니다.');
@@ -712,9 +712,9 @@ function toggleFocusMode() {
     focusCreatedNodeIds.clear(); focusCreatedEdgeIds.clear();
     sel = {type: null, id: null};
     focusNodeId = null;
-    $('#btnFocus').textContent = '포커스 종료';
+    $('#btnFocus').textContent = '흐름 종료';
     $('#btnFocus').setAttribute('aria-pressed', 'true');
-    setFstat('포커스할 노드를 선택하세요.');
+    setFstat('흐름을 볼 시작 노드를 선택하세요.');
   }
   render();
   renderPanel();
@@ -771,7 +771,7 @@ function deleteSelected() {
   } else return;
   if (deletedFocusNode) {
     focusNodeId = null;
-    if (focusMode) setFstat('포커스할 노드를 선택하세요.');
+    if (focusMode) setFstat('흐름을 볼 시작 노드를 선택하세요.');
   }
   sel = {type: null, id: null}; save(); render(); renderPanel();
 }
@@ -933,7 +933,7 @@ function layoutNodes(mode) {
   }
 }
 
-// 정렬 메뉴에서 고른 모양대로 배열합니다. 포커스 모드이면 포커스로 보이는 노드와 화살표만 배열합니다.
+// 정렬 메뉴에서 고른 모양대로 배열합니다. 흐름 모드이면 흐름으로 보이는 노드와 화살표만 배열합니다.
 function autoLayout(mode) {
   const allNodes = S.nodes, allEdges = S.edges;
   if ((focusMode && focusNodeId) || connActive()) {
