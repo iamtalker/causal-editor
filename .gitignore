@@ -16,9 +16,3 @@ node_modules/
 # 안드로이드 앱 빌드 산출물 (android/)
 android/www/
 android/build.log
-
-
-
-# 설치버전: 데이터 폴더 설정(이 PC의 경로가 들어 있음)과 내려받은 Node.js
-설치버전/프로그램/data-folder.json
-설치버전/node/
