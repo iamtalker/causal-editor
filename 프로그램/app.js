@@ -1525,9 +1525,11 @@ $('#btnAdd').onclick = () => addNode(60 + Math.random() * 300, 60 + Math.random(
 $('#btnDelNode').onclick = deleteSelected;
 $('#btnOpenMd').onclick = () => {
   const n = node(sel.id); if (!n) return;
-  // 브라우저는 파일을 OS의 기본 프로그램으로 열 수 없으므로, 노드 md 파일을 내려받습니다.
-  download(fileName(n), nodeMd(n), 'text/markdown');
-  setFstat(`${fileName(n)} 을 내려받았습니다.`);
+  // 브라우저는 파일을 OS의 기본 프로그램으로 열 수 없으므로, 저장 창 없이 새 탭에 텍스트로 보여 줍니다.
+  const url = URL.createObjectURL(new Blob([nodeMd(n)], {type: 'text/plain;charset=utf-8'}));
+  const tab = window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  setFstat(tab ? `${fileName(n)} 을 새 탭에 열었습니다.` : '새 탭이 막혔습니다. 브라우저의 팝업 차단을 풀어 주세요.');
 };
 $('#btnDelEdge').onclick = deleteSelected;
 $('#btnReset').onclick = async () => {
