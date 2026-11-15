@@ -86,24 +86,15 @@ function pickFolder() {
     if (process.platform !== 'win32') return reject(new Error('폴더 고르기 창은 Windows에서만 지원합니다. 폴더 경로를 직접 입력하세요.'));
     if (pickBusy) return reject(new Error('폴더 고르기 창이 이미 열려 있습니다.'));
     pickBusy = true;
-    const script = [
-      'Add-Type -AssemblyName System.Windows.Forms',
-      '[Console]::OutputEncoding = [Text.Encoding]::UTF8',
-      '$o = New-Object System.Windows.Forms.Form; $o.TopMost = $true; $o.Opacity = 0; $o.ShowInTaskbar = $false; $o.Show(); $o.Activate()',
-      '$d = New-Object System.Windows.Forms.FolderBrowserDialog',
-      "$d.Description = '인과 편집기 데이터 폴더를 고르세요'",
-      '$d.ShowNewFolderButton = $true',
-      "if ($d.ShowDialog($o) -eq 'OK') { Write-Output $d.SelectedPath }",
-      '$o.Close()'
-    ].join('\n');
-    const child = spawn('powershell', ['-NoProfile', '-STA', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {windowsHide: false});
+    // 탐색기 모양의 폴더 고르기 창(pick-folder.ps1). 한글 제목은 파일에 쓰지 않고 매개변수로 넘깁니다(PowerShell 5.1이 BOM 없는 한글 파일을 깨뜨림).
+    const child = spawn('powershell', ['-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', path.join(APP_DIR, 'pick-folder.ps1'), '-Title', '인과 편집기 데이터 폴더를 고르세요'], {windowsHide: false});
     let out = '', err = '';
     child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     child.stdout.on('data', c => { out += c; });
-    child.stderr.on('data', c => { err += c; });
+    child.stderr.on('data', c => { err += c; });   // 오류가 나면 아래에서 로그로 남깁니다
     const timer = setTimeout(() => child.kill(), 10 * 60 * 1000);
     child.on('error', e => { clearTimeout(timer); pickBusy = false; reject(e); });
-    child.on('close', () => { clearTimeout(timer); pickBusy = false; resolve(out.trim()); });
+    child.on('close', () => { clearTimeout(timer); pickBusy = false; if (err.trim()) console.log('폴더 고르기 창 오류: ' + err.trim().slice(0, 300)); resolve(out.trim()); });
   });
 }
 
