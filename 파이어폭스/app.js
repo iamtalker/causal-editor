@@ -836,10 +836,10 @@ function download(name, text, type) {
 const setFstat = t => { $('#fstat').textContent = t; };
 const storeLabel = () => Store.state.mode === 'folder' ? `폴더(${Store.state.folderName})` : '브라우저 저장';
 
-const nodeFileList = () => [...S.nodes.map(n => ({name: fileName(n), text: nodeMd(n)})), {name: '_경로.md', text: pathsMd()}];
 async function syncNodeFiles() {
   if (mdReadFailed) return;   // md를 못 읽은 상태에서 쓰면 기존 노드 파일이 지워질 수 있습니다
-  const files = nodeFileList();
+  const files = S.nodes.map(n => ({name: fileName(n), text: nodeMd(n)}));
+  files.push({name: '_경로.md', text: pathsMd()});
   try {
     const j = await Store.writeNodes(files);
     setFstat(`${storeLabel()}: 노드 ${j.count}개 중 ${j.changed ?? j.count}개 저장됨 (${new Date().toLocaleTimeString()})`);
@@ -1611,50 +1611,6 @@ $('#btnTipLater').onclick = () => $('#folderTipDlg').close();
 $('#btnTipConnect').onclick = async () => { $('#folderTipDlg').close(); await connectFolder(); };
 setInterval(() => maybeAutoSaveVersion().catch(() => {}), 10 * 60 * 1000);   // 오래 켜 둔 탭에서도 정한 시간이 지나면 만듭니다
 document.addEventListener('visibilitychange', () => { if (!document.hidden) maybeAutoSaveVersion().catch(() => {}); });
-
-/* ---------- 구글 드라이브 동기화 (수동) ---------- */
-const driveStatus = t => { $('#driveStatus').textContent = t; };
-let driveBusy = false;
-async function driveRun(label, fn) {
-  if (driveBusy) return;
-  driveBusy = true;
-  document.querySelectorAll('#btnDrivePush, #btnDrivePull').forEach(b => { b.disabled = true; });
-  driveStatus(`${label} 중...`);
-  try { await fn(); }
-  catch (err) { driveStatus(`${label} 실패: ${err.message}`); }
-  finally { driveBusy = false; document.querySelectorAll('#btnDrivePush, #btnDrivePull').forEach(b => { b.disabled = false; }); }
-}
-$('#driveClientId').value = Drive.clientId();
-$('#driveRedirect').value = Drive.redirectUrl();
-$('#driveRedirect').onfocus = e => e.target.select();
-$('#driveClientId').onchange = e => { Drive.setClientId(e.target.value); driveStatus('클라이언트 ID를 저장했습니다.'); };
-$('#btnDriveLogout').onclick = () => { Drive.logout(); driveStatus('이 화면에 보관한 로그인 정보를 지웠습니다. 다음 올리기·받기에서 다시 로그인합니다.'); };
-$('#btnDrivePush').onclick = () => driveRun('드라이브에 올리기', async () => {
-  if (mdReadFailed) throw new Error("노드 파일을 읽지 못한 상태입니다. '파일 다시 읽기'로 먼저 읽어 주세요.");
-  await persistNow();
-  const files = nodeFileList();
-  const p = await Drive.plan(files);
-  const changes = p.create.length + p.update.length + p.trash.length;
-  if (!changes) { driveStatus(`드라이브와 같습니다 (파일 ${p.same}개).`); return; }
-  const warn = S.nodes.length === 0 && p.trash.length ? '\n\n⚠️ 지금 화면에 노드가 없습니다. 드라이브의 파일이 전부 휴지통으로 갑니다.' : '';
-  if (!confirm(`드라이브의 "인과편집기" 폴더를 지금 그래프와 같게 만듭니다.\n\n새 파일 ${p.create.length}개, 바뀐 파일 ${p.update.length}개, 휴지통으로 ${p.trash.length}개(드라이브에만 있던 파일), 그대로 ${p.same}개${warn}\n\n계속할까요?`)) { driveStatus('올리기를 취소했습니다.'); return; }
-  await Drive.push(p);
-  driveStatus(`올렸습니다: 새 ${p.create.length}개, 바뀐 ${p.update.length}개, 휴지통 ${p.trash.length}개 (${new Date().toLocaleTimeString()})`);
-});
-$('#btnDrivePull').onclick = () => driveRun('드라이브에서 받기', async () => {
-  const files = await Drive.pull(Store.OWN_FILE);
-  if (!files) { driveStatus('드라이브에 "인과편집기" 폴더가 없습니다. 먼저 다른 기기에서 올려 주세요.'); return; }
-  const count = files.filter(f => f.name !== '_경로.md').length;
-  if (!count) { driveStatus('드라이브 폴더에 노드 파일이 없습니다.'); return; }
-  if (!confirm(`드라이브에서 노드 ${count}개를 받아 현재 그래프(노드 ${S.nodes.length}개)를 바꿉니다.\n\n받기 전 상태는 버전 기록에 자동으로 저장됩니다. 계속할까요?`)) { driveStatus('받기를 취소했습니다.'); return; }
-  await persistNow();
-  await createVersion(`드라이브에서 받기 전 ${new Date().toLocaleString('sv-SE').slice(0, 16)}`, S, true);
-  await Store.writeNodes(files);
-  lastEditAt = 0;
-  await reloadFromNodeFiles(true);
-  await persistNow();
-  driveStatus(`받았습니다: 노드 ${S.nodes.length}개, 화살표 ${S.edges.length}개 (${new Date().toLocaleTimeString()})`);
-});
 
 Store.init().then(() => {
   if (Store.state.mode === 'browser' && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});   // 브라우저가 저장 공간을 임의로 비우지 않도록 요청
