@@ -4,7 +4,8 @@
 //   folder  사용자가 고른 폴더에 노드파일/·내부데이터/·변경이력/ 을 만듭니다. 크롬·엣지(File System Access API)에서만 됩니다.
 // 폴더를 연결하면 폴더가 원본입니다. 브라우저에 저장된 내용은 그대로 두고 쓰지 않으며, 연결을 끊으면 다시 그 내용으로 돌아옵니다.
 const Store = (function () {
-  const OWN_FILE = /^(n\d+_.*|_경로)\.md$/;
+  // 동기화 도구의 충돌 사본(예: n0002_부자.sync-conflict-....md)은 노드 파일이 아니므로 읽지도 지우지도 않습니다.
+  const OWN_FILE = /^(?!.*\.sync-conflict-)(_경로|[^_].*)\.md$/;
   const HISTORY_FILE = /^\d{8}T\d{6}Z_[a-z0-9-]+\.json$/;
   const DIR_NODES = '노드파일', DIR_GRAPH = '내부데이터', DIR_HISTORY = '변경이력', GRAPH_NAME = '그래프.json';
   const folderSupported = typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
@@ -90,7 +91,10 @@ const Store = (function () {
     if (S.mode === 'folder') {
       const dir = await sub(DIR_NODES, true);
       const files = [];
-      for (const name of await listFiles(dir, OWN_FILE)) files.push({name, text: await readText(dir, name)});
+      for (const name of await listFiles(dir, OWN_FILE)) {
+        const file = await (await dir.getFileHandle(name)).getFile();
+        files.push({name, text: await file.text(), mtime: file.lastModified});   // 같은 제목이 여럿일 때 최근 파일을 고르는 데 씁니다
+      }
       return files;
     }
     return (await tx(['nodes'], 'readonly', s => s.getAll())).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);

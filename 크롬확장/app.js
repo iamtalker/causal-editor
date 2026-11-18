@@ -854,7 +854,8 @@ function enumeratePaths(limit) {
   return out;
 }
 
-const fileName = n => NodeMd.fileName(n);
+// 파일 이름은 제목이며, 제목이 겹치면 id를 붙입니다. 지금 그래프 기준으로 계산합니다.
+const fileName = n => NodeMd.fileNames(S.nodes).get(n.id);
 const linkTo = n => `[${n.title}](${encodeURI(fileName(n))})`;
 
 // 형식과 읽기 규칙은 md-graph.js에 있습니다. 노드 파일이 원본이므로 여기서 파일을 쓰는 내용을 만듭니다.
