@@ -50,10 +50,10 @@ let focusMode = false, focusNodeId = null;
 // 연결 모드: 처음 선택한 노드(connNodeId)를 중심으로 고정하고, 연결된 노드만 connDepth 단계까지 보여 줍니다(방향은 따지지 않습니다). 화면 설정이라 파일에는 저장하지 않습니다.
 let connMode = false, connNodeId = null, connDepth = 1;
 const connCreatedIds = new Set();
-// 상태 보기: 선택한 상태가 아닌 노드와 그 화살표를 흐리게 표시합니다. 화면 보기 설정이라 파일에 저장하지 않습니다.
+// 상태 보기는 선택한 상태의 노드와 화살표만 표시합니다. 화면 설정이며 파일에는 저장하지 않습니다.
 let statusFilter = 'all';
+const statusCreatedNodeIds = new Set();
 let compactView = false;
-const isDimmedByStatus = n => statusFilter !== 'all' && n.status !== statusFilter;
 let focusCreatedNodeIds = new Set(), focusCreatedEdgeIds = new Set();
 let lastEditAt = 0;   // 마지막 편집 시각: 편집 직후에는 파일을 다시 읽지 않습니다
 let mdReadFailed = false;   // 노드 md를 읽지 못한 상태: 이때는 파일과 JSON을 아무것도 쓰지 않습니다
@@ -123,7 +123,7 @@ async function redo() {
   await restoreHistory(next);
 }
 /* ---------- 저장 ----------
-   원본은 노드 md 파일(syncNodeFiles)입니다. 내부데이터/그래프.json(persistGraph)은 설정과 백업용 사본입니다.
+   원본은 노드 md 파일(syncNodeFiles)입니다. 편집기데이터/그래프.json(persistGraph)은 설정과 백업용 사본입니다.
    브라우저(localStorage)에는 설정만 보관합니다(cacheSettings). 그래프 내용은 브라우저에 복사하지 않습니다.
    편집하면 save()가 설정을 바로 캐시하고, 400ms 뒤 persistNow()가 md → JSON 순서로 한 번에 저장합니다. */
 function cacheSettings() { try { localStorage.setItem(KEY, JSON.stringify({settings: S.settings})); } catch (e) {} }
@@ -183,20 +183,16 @@ function renderVersions() {
 }
 async function deleteVersionsBulk(ids) {
   if (!ids.length) { alert('삭제할 버전을 체크하세요.'); return; }
-  if (!confirm(`체크한 버전 ${ids.length}개를 삭제할까요? 삭제한 버전 파일은 복구할 수 없습니다.`)) return;
-  let failed = 0;
-  for (const id of ids) {
-    try {
-      await Store.deleteVersion(id);
-      VERSION_LIST = VERSION_LIST.filter(item => item.id !== id);
-    } catch (err) { failed++; }
-  }
+  if (!confirm(`체크한 버전 ${ids.length}개를 삭제할까요? 삭제한 버전은 복구할 수 없습니다.`)) return;
+  try { await Store.deleteVersion(ids); }
+  catch (err) { setFstat(`버전 삭제에 실패했습니다: ${err.message}`); renderVersions(); return; }
+  VERSION_LIST = VERSION_LIST.filter(item => !ids.includes(item.id));
   renderVersions();
-  setFstat(`버전 ${ids.length - failed}개를 삭제했습니다${failed ? ` (실패 ${failed}개)` : ''}.`);
+  setFstat(`버전 ${ids.length}개를 삭제했습니다.`);
 }
 
 /* 노드 파일(.md)이 그래프의 원본입니다. 시작할 때와 '파일 다시 읽기'를 누를 때 파일에서 그래프를 만듭니다.
-   그래프 JSON(내부데이터/그래프.json)은 설정과 백업을 담는 보조 사본입니다. */
+   그래프 JSON(편집기데이터/그래프.json)은 설정과 백업을 담는 보조 사본입니다. */
 const fetchNodeFiles = () => Store.readNodes();
 const fetchBackupGraph = () => Store.readGraph();   // {data}  (파일이 없으면 data는 null)
 // 파일 내용만 비교합니다 (반올림한 위치 기준). 같으면 다시 그리지 않습니다.
@@ -424,6 +420,13 @@ function visibleSets() {
     for (const id of connCreatedIds) if (node(id)) visibleNodeIds.add(id);   // 연결 모드 중 새로 만든 노드는 계속 보입니다
     for (const e of S.edges) if (visibleNodeIds.has(e.from) && visibleNodeIds.has(e.to)) visibleEdgeIds.add(e.id);
   }
+  if (statusFilter !== 'all') {
+    for (const id of [...visibleNodeIds]) {
+      const n = node(id);
+      if (n && n.status !== statusFilter && !statusCreatedNodeIds.has(id)) visibleNodeIds.delete(id);
+    }
+    for (const e of S.edges) if (!visibleNodeIds.has(e.from) || !visibleNodeIds.has(e.to)) visibleEdgeIds.delete(e.id);
+  }
   return {visibleNodeIds, visibleEdgeIds, focusPathEdgeIds};
 }
 
@@ -432,6 +435,8 @@ function render() {
   if (focusNodeId && !node(focusNodeId)) focusNodeId = null;
   applyStatusColors();
   const {visibleNodeIds, visibleEdgeIds, focusPathEdgeIds} = visibleSets();
+  const selectionHidden = sel.type === 'node' ? !visibleNodeIds.has(sel.id) : sel.type === 'edge' ? !visibleEdgeIds.has(sel.id) : false;
+  if (selectionHidden) sel = {type: null, id: null};
   $('#stage').style.background = st.bgColor;
   const EDGE_HOT = '#111827';   // 선택한 노드에 연결된 선을 강조하는 검정
   const markerColors = new Set([...Object.values(NODE_STATUSES).map(status => status.color), EDGE_HOT]);
@@ -467,8 +472,7 @@ function render() {
     if (!a || !b) continue;   // 없는 노드를 가리키는 화살표 때문에 화면 전체가 멈추지 않게 건너뜁니다
     // 선택한 노드에 들어오거나 나가는 선은 검정으로 강조하고, 다른 선 위에 그립니다
     const hot = sel.type === 'node' && (e.from === sel.id || e.to === sel.id);
-    const edgeDim = isDimmedByStatus(a) || isDimmedByStatus(b);
-    out += `<g opacity="${edgeDim ? 0.2 : 1}">`;
+    out += '<g>';
     const forward = a.x + W / 2 <= b.x + W / 2;
     const x1 = forward ? a.x + W : a.x, x2 = forward ? b.x : b.x + W;
     const offsets = focusOffsets.get(e.id) || {start: 0, end: 0};
@@ -522,7 +526,7 @@ function render() {
         <circle cx="16" cy="88" r="3.5" fill="${status.color}"/>
         <text x="26" y="92" font-size="11" fill="#6b7280">${status.label}</text>`;
     }
-    h += `<g data-node="${esc(n.id)}" transform="translate(${n.x},${n.y})" style="cursor:move" opacity="${isDimmedByStatus(n) ? 0.25 : 1}">${body}</g>`;
+    h += `<g data-node="${esc(n.id)}" transform="translate(${n.x},${n.y})" style="cursor:move">${body}</g>`;
   }
   // 캔버스 크기: 노드가 모두 들어갈 만큼 키우고, 확대/축소 비율을 적용
   const padding = Math.max(0, Math.min(1000, Number(st.canvasPadding) || 0));
@@ -537,6 +541,7 @@ function render() {
   svg.setAttribute('width', lastCW * zoom);
   svg.setAttribute('height', lastCH * zoom);
   svg.innerHTML = h;
+  if (selectionHidden) renderPanel();
   // 왼쪽·위로 캔버스가 넓어지면 화면에 보이던 내용이 밀리지 않도록 스크롤 위치를 보정합니다
   if (hadView) {
     const stageEl = $('#stage');
@@ -786,6 +791,7 @@ function addNode(x, y) {
   S.nodes.push({id, status:'not_started', title:'새 노드', x: Math.max(0, x), y: Math.max(0, y), memo:''});
   if (focusMode) focusCreatedNodeIds.add(id);
   if (connMode) connCreatedIds.add(id);   // 연결 모드 중 새로 만든 노드는 계속 보입니다
+  if (statusFilter !== 'all') statusCreatedNodeIds.add(id);
   save(); select('node', id);
 }
 
@@ -1000,7 +1006,7 @@ function layoutNodes(mode) {
 // 정렬 메뉴에서 고른 모양대로 배열합니다. 흐름 모드이면 흐름으로 보이는 노드와 화살표만 배열합니다.
 function autoLayout(mode) {
   const allNodes = S.nodes, allEdges = S.edges;
-  if ((focusMode && focusNodeId) || connActive()) {
+  if ((focusMode && focusNodeId) || connActive() || statusFilter !== 'all') {
     const {visibleNodeIds, visibleEdgeIds} = visibleSets();
     S.nodes = allNodes.filter(n => visibleNodeIds.has(n.id));
     S.edges = allEdges.filter(e => visibleEdgeIds.has(e.id) && visibleNodeIds.has(e.from) && visibleNodeIds.has(e.to));
@@ -1388,7 +1394,7 @@ $('#s_canvasPadding').addEventListener('input', e => {
   save(); render();
 });
 $('#btnSettingsDefault').onclick = () => { S.settings = {...DEFAULT_SETTINGS}; save(); render(); renderSettings(); };
-$('#statusFilter').addEventListener('change', e => { statusFilter = e.target.value; render(); if (!$('#searchResults').hidden) renderSearchResults(); });
+$('#statusFilter').addEventListener('change', e => { statusFilter = e.target.value; statusCreatedNodeIds.clear(); render(); if (!$('#searchResults').hidden) renderSearchResults(); });
 $('#compactView').addEventListener('change', e => { compactView = e.target.checked; render(); fitView(); });
 // 하단 패널(폰 화면): 체크를 해제하면 제목 줄만 남기고 최소화, 다시 체크하면 원래 크기로 돌아갑니다.
 $('#panelExpand').addEventListener('change', e => $('aside').classList.toggle('minimized', !e.target.checked));
@@ -1485,7 +1491,7 @@ $('#versionList').addEventListener('click', async e => {
   }
   if (remove) {
     const v = versions().find(x => x.id === remove.dataset.versionDelete);
-    if (!v || !confirm(`${new Date(v.at).toLocaleString()} 버전을 삭제할까요? 삭제한 버전 파일은 복구할 수 없습니다.`)) return;
+    if (!v || !confirm(`${new Date(v.at).toLocaleString()} 버전을 삭제할까요? 삭제한 버전은 복구할 수 없습니다.`)) return;
     try {
       await Store.deleteVersion(v.id);
       VERSION_LIST = VERSION_LIST.filter(item => item.id !== v.id);
@@ -1503,7 +1509,7 @@ async function loadDataFolderSetting() {
   $('#btnDataFolderDefault').hidden = st.mode !== 'folder';
   $('#btnDataFolderDefault').textContent = '폴더 연결 끊기';
   $('#dataFolderHelp').textContent = Store.folderSupported
-    ? '기본은 이 브라우저에 저장합니다. 폴더를 연결하면 노드 파일(.md)·내부데이터·변경이력을 그 폴더에 만들고, 폴더가 원본이 됩니다. 브라우저의 사이트 데이터를 지우면 브라우저 저장은 사라지니, 중요한 그래프는 폴더를 연결하거나 JSON으로 저장해 두세요.'
+    ? '기본은 이 브라우저에 저장합니다. 폴더를 연결하면 노드 파일(.md)·편집기데이터·변경이력을 그 폴더에 만들고, 폴더가 원본이 됩니다. 브라우저의 사이트 데이터를 지우면 브라우저 저장은 사라지니, 중요한 그래프는 폴더를 연결하거나 JSON으로 저장해 두세요.'
     : '이 브라우저에는 폴더 저장 기능이 없어 브라우저에 저장합니다(폴더 저장은 크롬·엣지에서 됩니다). 브라우저의 사이트 데이터를 지우면 사라지니 JSON으로 자주 저장해 두세요.';
   $('#dataFolderStatus').textContent = st.mode === 'folder'
     ? `폴더 연결됨: ${st.folderName}${st.folderReady ? '' : ' (접근 권한 확인이 필요합니다. "폴더 다시 허용"을 누르세요)'}`
@@ -1548,7 +1554,7 @@ $('#btnFolderAllow').onclick = async () => {
 $('#btnDataFolderDefault').onclick = disconnectFolder;
 $('#btnSave').onclick = () => download('causal-editor.json', JSON.stringify(S, null, 2), 'application/json');
 
-// 그래프 JSON, 또는 변경이력/의 버전 파일({id, at, summary, data})을 받아 현재 그래프를 바꿉니다.
+// 그래프 JSON 또는 변경 이력의 버전({id, at, summary, data})을 받아 현재 그래프를 바꿉니다.
 // 바꾸면 저장 위치(브라우저 또는 연결한 폴더의 노드파일/)도 바로 덮어쓰이므로, 먼저 확인을 받습니다.
 async function importGraphFile(text, fileName = '') {
   let o = JSON.parse(text);
@@ -1615,28 +1621,35 @@ setSidebarVisible(!sidebarHiddenAtLoad);
 buildPresets();
 render(); renderPanel();
 // 저장소 방식(브라우저·폴더)을 정한 뒤 변경 이력과 그래프를 읽습니다.
-/* ---------- 데이터 안전: 버전 기록의 "N시간마다 자동 저장" 옵션, 첫 실행 때 폴더 연결 권고 ---------- */
-// 옵션이 켜져 있으면(기본 켜짐, 기본 24시간마다) 버전 기록에 "자동 저장 날짜 시각"으로 남깁니다. 마지막 자동 저장 뒤 정한 시간이 지났고 그래프가 마지막 버전과 다를 때만 만듭니다.
+/* ---------- 데이터 안전: 버전 기록의 자동 저장 간격, 첫 실행 때 폴더 연결 권고 ---------- */
+// 옵션이 켜져 있으면(기본 켜짐, 기본 24시간마다) 마지막 자동 저장 뒤 정한 시간이 지났고 그래프가 달라졌을 때 버전을 남깁니다.
 // 자동 저장한 버전도 일반 버전과 같아서 버전 기록 창에서 복원·삭제할 수 있고, 자동으로 지우지는 않습니다.
-// 폴더를 연결한 상태면 버전이 폴더의 변경이력/에 파일로 남습니다(브라우저 저장만 쓸 때는 브라우저 안에만 남아 사이트 데이터를 지우면 함께 사라집니다).
-const AUTO_PREFIX = '자동 저장 ', AUTO_VERSION_KEY = 'causal-editor-auto-version', AUTO_HOURS_KEY = 'causal-editor-auto-hours';
+// 폴더를 연결한 상태면 버전이 편집기데이터/변경이력.json에 남습니다(브라우저 저장만 쓸 때는 브라우저 안에만 남아 사이트 데이터를 지우면 함께 사라집니다).
+const AUTO_PREFIX = '자동 저장 ', AUTO_VERSION_KEY = 'causal-editor-auto-version', AUTO_HOURS_KEY = 'causal-editor-auto-hours', AUTO_MINUTES_KEY = 'causal-editor-auto-minutes';
 const AUTO_HOURS_DEFAULT = 24, AUTO_HOURS_MAX = 720, AUTO_KEEP = 300;   // 자동 저장 버전은 최근 300개만 남깁니다(직접 만든 버전은 지우지 않습니다)
+function normalizeAutoInterval(hours, minutes) {
+  const parse = value => { const n = Number(value); return value !== '' && Number.isInteger(n) ? n : 0; };
+  const rawH = parse(hours), rawM = parse(minutes);
+  const empty = value => value == null || value === '' || !Number.isFinite(Number(value));
+  if (!rawH && !rawM && empty(hours) && empty(minutes)) return {hours: AUTO_HOURS_DEFAULT, minutes: 0};
+  const h = Math.min(AUTO_HOURS_MAX, Math.max(0, rawH)), m = Math.min(59, Math.max(0, rawM));
+  const total = Math.min(AUTO_HOURS_MAX * 60, Math.max(1, h * 60 + m));
+  return {hours: Math.floor(total / 60), minutes: total % 60};
+}
 const autoVersionOn = () => { try { return localStorage.getItem(AUTO_VERSION_KEY) !== '0'; } catch (e) { return true; } };
-const autoHours = () => {
-  let h = AUTO_HOURS_DEFAULT;
-  try { h = Math.round(Number(localStorage.getItem(AUTO_HOURS_KEY))) || AUTO_HOURS_DEFAULT; } catch (e) { /* 기본값 */ }
-  return Math.min(AUTO_HOURS_MAX, Math.max(1, h));
+const autoInterval = () => {
+  try { return normalizeAutoInterval(localStorage.getItem(AUTO_HOURS_KEY), localStorage.getItem(AUTO_MINUTES_KEY)); }
+  catch (e) { return {hours: AUTO_HOURS_DEFAULT, minutes: 0}; }
 };
 let autoSaveBusy = false;
 // 버전 기록은 목록을 열 때 전부 메모리로 읽으므로, 짧은 간격으로 오래 쓰면 자동 저장 버전이 끝없이 쌓여 느려집니다. 가장 오래된 자동 저장부터 지웁니다.
 async function pruneAutoVersions() {
   const old = VERSION_LIST.filter(v => String(v.summary).startsWith(AUTO_PREFIX)).slice(AUTO_KEEP);   // VERSION_LIST는 최신순
   if (!old.length) return;
-  const gone = new Set();
-  for (const v of old) {
-    try { await Store.deleteVersion(v.id); gone.add(v.id); } catch (e) { break; }
-  }
-  if (gone.size) { VERSION_LIST = VERSION_LIST.filter(v => !gone.has(v.id)); if ($('#versionDlg').open) renderVersions(); }
+  try { await Store.deleteVersion(old.map(v => v.id)); } catch (e) { return; }
+  const ids = new Set(old.map(v => v.id));
+  VERSION_LIST = VERSION_LIST.filter(v => !ids.has(v.id));
+  if ($('#versionDlg').open) renderVersions();
 }
 async function maybeAutoSaveVersion() {
   if (!autoVersionOn() || autoSaveBusy || mdReadFailed || !S.nodes.length) return;
@@ -1644,24 +1657,30 @@ async function maybeAutoSaveVersion() {
   autoSaveBusy = true;
   try {
     const last = VERSION_LIST.find(v => String(v.summary).startsWith(AUTO_PREFIX));   // VERSION_LIST는 최신순
-    if (!last || Date.now() - new Date(last.at).getTime() >= autoHours() * 60 * 60 * 1000) {
+    const interval = autoInterval();
+    if (!last || Date.now() - new Date(last.at).getTime() >= (interval.hours * 60 + interval.minutes) * 60 * 1000) {
       await createVersion(AUTO_PREFIX + new Date().toLocaleString('sv-SE').slice(0, 16), S, false);
       await pruneAutoVersions();
     }
   } finally { autoSaveBusy = false; }
 }
 $('#autoVersion').checked = autoVersionOn();
-$('#autoHours').value = autoHours();
+const savedAutoInterval = autoInterval();
+$('#autoHours').value = savedAutoInterval.hours;
+$('#autoMinutes').value = savedAutoInterval.minutes;
 $('#autoVersion').addEventListener('change', e => {
   try { localStorage.setItem(AUTO_VERSION_KEY, e.target.checked ? '1' : '0'); } catch (err) {}
   if (e.target.checked) maybeAutoSaveVersion().catch(() => {});
 });
-$('#autoHours').addEventListener('change', e => {
-  const h = Math.min(AUTO_HOURS_MAX, Math.max(1, Math.round(Number(e.target.value)) || AUTO_HOURS_DEFAULT));   // 1시간 단위 정수만
-  e.target.value = h;
-  try { localStorage.setItem(AUTO_HOURS_KEY, String(h)); } catch (err) {}
+function saveAutoInterval() {
+  const interval = normalizeAutoInterval($('#autoHours').value, $('#autoMinutes').value);
+  $('#autoHours').value = interval.hours;
+  $('#autoMinutes').value = interval.minutes;
+  try { localStorage.setItem(AUTO_HOURS_KEY, String(interval.hours)); localStorage.setItem(AUTO_MINUTES_KEY, String(interval.minutes)); } catch (err) {}
   maybeAutoSaveVersion().catch(() => {});
-});
+}
+$('#autoHours').addEventListener('change', saveAutoInterval);
+$('#autoMinutes').addEventListener('change', saveAutoInterval);
 const FOLDER_TIP_KEY = 'causal-editor-folder-tip-v1';
 function maybeShowFolderTip() {
   if (Store.state.mode !== 'browser' || !Store.folderSupported) return;
@@ -1671,7 +1690,7 @@ function maybeShowFolderTip() {
 }
 $('#btnTipLater').onclick = () => $('#folderTipDlg').close();
 $('#btnTipConnect').onclick = async () => { $('#folderTipDlg').close(); await connectFolder(); };
-setInterval(() => maybeAutoSaveVersion().catch(() => {}), 10 * 60 * 1000);   // 오래 켜 둔 탭에서도 정한 시간이 지나면 만듭니다
+setInterval(() => maybeAutoSaveVersion().catch(() => {}), 15 * 1000);   // 1분 간격도 늦지 않게 확인합니다
 document.addEventListener('visibilitychange', () => { if (!document.hidden) maybeAutoSaveVersion().catch(() => {}); });
 
 Store.init().then(() => {

@@ -1,16 +1,18 @@
 // 인과 편집기 저장소.
 // 편집기는 아래 두 방식 중 하나로 노드 파일·그래프 JSON·버전 기록을 저장하고 읽습니다. 화면 코드는 방식을 신경 쓰지 않습니다.
 //   browser 기본값. 이 브라우저(확장 프로그램)의 IndexedDB에 저장합니다. 권한 확인이 필요 없습니다.
-//   folder  사용자가 고른 폴더에 노드파일/·내부데이터/·변경이력/ 을 만듭니다. 크롬·엣지(File System Access API)에서만 됩니다.
+//   folder  사용자가 고른 폴더에 노드파일/·편집기데이터/ 을 만듭니다. 크롬·엣지(File System Access API)에서만 됩니다.
 // 폴더를 연결하면 폴더가 원본입니다. 브라우저에 저장된 내용은 그대로 두고 쓰지 않으며, 연결을 끊으면 다시 그 내용으로 돌아옵니다.
 const Store = (function () {
   // 동기화 도구의 충돌 사본(예: n0002_부자.sync-conflict-....md)은 노드 파일이 아니므로 읽지도 지우지도 않습니다.
   const OWN_FILE = /^(?!.*\.sync-conflict-)(_경로|[^_].*)\.md$/;
   const HISTORY_FILE = /^\d{8}T\d{6}Z_[a-z0-9-]+\.json$/;
-  const DIR_NODES = '노드파일', DIR_GRAPH = '내부데이터', DIR_HISTORY = '변경이력', GRAPH_NAME = '그래프.json';
+  const HISTORY_BUNDLE = '변경이력.json';
+  const DIR_NODES = '노드파일', DIR_DATA = '편집기데이터', DIR_OLD_GRAPH = '내부데이터', DIR_OLD_HISTORY = '변경이력', GRAPH_NAME = '그래프.json';
   const folderSupported = typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
 
   const S = {mode: 'browser', folderName: '', handle: null, folderReady: false};
+  let historyQueue = Promise.resolve();
 
   /* ---------- IndexedDB ---------- */
   let dbPromise = null;
@@ -85,6 +87,100 @@ const Store = (function () {
   const newVersionId = () => `${new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')}_${Math.random().toString(36).slice(2, 8)}`;
   function checkGraph(d) { if (!d || !Array.isArray(d.nodes) || !Array.isArray(d.edges)) throw new Error('잘못된 그래프 데이터입니다.'); }
 
+  function historyError() { return new Error('변경이력.json 파일이 비어 있거나 올바른 형식이 아닙니다. 파일을 확인한 뒤 다시 시도하세요.'); }
+  async function withHistoryLock(fn) {
+    if (typeof navigator !== 'undefined' && navigator.locks) return navigator.locks.request('causal-editor-history', fn);
+    const result = historyQueue.then(fn, fn);
+    historyQueue = result.catch(() => {});
+    return result;
+  }
+  function validHistoryItem(item) { return item && typeof item.id === 'string' && typeof item.at === 'string' && typeof item.summary === 'string' && item.data && Array.isArray(item.data.nodes) && Array.isArray(item.data.edges); }
+  function sameValue(a, b) {
+    if (a === b) return true;
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false;
+    const ak = Object.keys(a), bk = Object.keys(b);
+    return ak.length === bk.length && ak.every(key => Object.prototype.hasOwnProperty.call(b, key) && sameValue(a[key], b[key]));
+  }
+  function sameHistoryItem(a, b) { return a.id === b.id && a.at === b.at && a.summary === b.summary && sameValue(a.data, b.data); }
+  function decodeHistory(bundle) {
+    if (!bundle || bundle.format !== 'causal-editor-history' || bundle.version !== 1 || !Array.isArray(bundle.pool) || !Array.isArray(bundle.items)) throw historyError();
+    const get = index => {
+      if (!Number.isInteger(index) || index < 0 || index >= bundle.pool.length) throw historyError();
+      return JSON.parse(JSON.stringify(bundle.pool[index]));
+    };
+    try {
+      return bundle.items.map(item => {
+        if (!item || typeof item.id !== 'string' || !HISTORY_FILE.test(item.id + '.json') || typeof item.at !== 'string' || typeof item.summary !== 'string' || !item.data || !Array.isArray(item.data.nodes) || !Array.isArray(item.data.edges)) throw historyError();
+        const data = {...item.data, nodes: item.data.nodes.map(get), edges: item.data.edges.map(get)};
+        if (Object.prototype.hasOwnProperty.call(item.data, 'settings')) data.settings = get(item.data.settings);
+        if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) throw historyError();
+        return {id: item.id, at: item.at, summary: item.summary, data};
+      });
+    } catch (e) { throw historyError(); }
+  }
+  function encodeHistory(items) {
+    const pool = [], indexes = new Map();
+    const put = value => {
+      const key = JSON.stringify(value);
+      if (!indexes.has(key)) { indexes.set(key, pool.length); pool.push(value); }
+      return indexes.get(key);
+    };
+    return {format: 'causal-editor-history', version: 1, pool, items: items.map(item => {
+      const {nodes, edges, settings, ...other} = item.data;
+      const data = {...other, nodes: nodes.map(put), edges: edges.map(put)};
+      if (Object.prototype.hasOwnProperty.call(item.data, 'settings')) data.settings = put(settings);
+      return {id: item.id, at: item.at, summary: item.summary, data};
+    })};
+  }
+  // 옛 폴더(내부데이터·변경이력)는 만들지 않으며, 파일을 옮긴 뒤 완전히 비었을 때만 지웁니다.
+  async function oldDir(name) { try { return await sub(name, false); } catch (e) { if (e && e.name === 'NotFoundError') return null; throw e; } }
+  async function removeIfEmpty(dir) { try { for await (const _ of dir.entries()) return; await S.handle.removeEntry(dir.name); } catch (e) { /* 남겨 둡니다 */ } }
+  // 옛 버전 파일(변경이력/, 안드로이드 앱도 여기에 씁니다)을 번들로 옮긴 뒤 mutate를 적용합니다.
+  async function folderHistory(mutate) {
+    return withHistoryLock(async () => {
+      const dir = await sub(DIR_DATA, true), legacy = await oldDir(DIR_OLD_HISTORY);
+      const originalText = await readText(dir, HISTORY_BUNDLE);
+      let items = [];
+      if (originalText !== null) { try { items = decodeHistory(JSON.parse(originalText)); } catch (e) { throw historyError(); } }
+      const ids = new Set(items.map(item => item.id)), loose = [];
+      for (const name of legacy ? await listFiles(legacy, HISTORY_FILE) : []) {
+        try {
+          const parsed = JSON.parse(await readText(legacy, name));
+          if (!validHistoryItem(parsed)) continue;
+          const item = {...parsed, id: name.slice(0, -5)};
+          loose.push({name, item});
+          if (!ids.has(item.id)) { items.push(item); ids.add(item.id); }
+        } catch (e) { /* 잘못된 개별 파일은 그대로 둡니다 */ }
+      }
+      const absorbedText = items.length ? JSON.stringify(encodeHistory(items)) : null;
+      if (absorbedText !== originalText && absorbedText !== null) await writeText(dir, HISTORY_BUNDLE, absorbedText);
+      const afterAbsorb = await readText(dir, HISTORY_BUNDLE);
+      let verifiedItems = [];
+      if (afterAbsorb !== null) { try { verifiedItems = decodeHistory(JSON.parse(afterAbsorb)); } catch (e) { throw historyError(); } }
+      if (loose.some(x => { const merged = items.find(item => item.id === x.item.id); return merged && sameHistoryItem(merged, x.item) && !verifiedItems.some(item => sameHistoryItem(item, x.item)); })) throw historyError();
+      for (const x of loose) {
+        if (!verifiedItems.some(item => sameHistoryItem(item, x.item))) continue;
+        try { await legacy.removeEntry(x.name); } catch (e) { /* 다음 조회에서 다시 정리합니다 */ }
+      }
+      const result = await mutate(items, loose);
+      if (result && result.deleteIds) {
+        for (const id of result.deleteIds) {
+          const conflicting = loose.some(x => x.item.id === id && !verifiedItems.some(item => sameHistoryItem(item, x.item)));
+          const remains = legacy && await readText(legacy, id + '.json') !== null;
+          if (conflicting || remains) throw new Error('변경 이력 파일을 삭제하지 못했습니다. 삭제를 취소하고 다시 시도해 주세요.');
+        }
+      }
+      const nextText = items.length || afterAbsorb !== null ? JSON.stringify(encodeHistory(items)) : null;
+      if (nextText !== afterAbsorb && nextText !== null) await writeText(dir, HISTORY_BUNDLE, nextText);
+      const finalText = await readText(dir, HISTORY_BUNDLE);
+      let finalItems = [];
+      if (finalText !== null) { try { finalItems = decodeHistory(JSON.parse(finalText)); } catch (e) { throw historyError(); } }
+      if (result && result.deleteIds && finalItems.some(item => result.deleteIds.has(item.id))) throw new Error('변경 이력 삭제 내용을 확인하지 못했습니다.');
+      if (legacy) await removeIfEmpty(legacy);
+      return result && Object.prototype.hasOwnProperty.call(result, 'value') ? result.value : result;
+    });
+  }
+
   /* ---------- 공통 인터페이스 ---------- */
   // 노드 파일 전체: [{name, text}]
   async function readNodes() {
@@ -126,26 +222,46 @@ const Store = (function () {
   }
 
   // 설정과 백업을 담은 보조 그래프 JSON → {data} (없으면 data는 null)
+  // 옛 위치(내부데이터/)의 그래프 JSON을 옮깁니다. 새 위치에 같은 내용이 있는 것을 확인했을 때만 옛 파일을 지우고, 내용이 다르면 둡니다.
+  // → 옮기지 못해 새 파일이 없을 때 대신 읽을 옛 내용 (없으면 null)
+  async function migrateGraph() {
+    try {
+      const old = await oldDir(DIR_OLD_GRAPH);
+      const oldText = old && await readText(old, GRAPH_NAME);
+      if (!oldText) return null;
+      JSON.parse(oldText);   // 깨진 파일은 옮기지도 지우지도 않습니다
+      try {
+        const dir = await sub(DIR_DATA, true);
+        if ((await readText(dir, GRAPH_NAME)) === null) await writeText(dir, GRAPH_NAME, oldText);
+        if ((await readText(dir, GRAPH_NAME)) === oldText) { await old.removeEntry(GRAPH_NAME); await removeIfEmpty(old); }
+      } catch (e) { /* 옮기지 못하면 옛 파일을 그대로 둡니다 */ }
+      return oldText;
+    } catch (e) { return null; }   // 옛 파일을 못 읽어도 편집기는 엽니다
+  }
   async function readGraph() {
     if (S.mode === 'folder') {
-      const text = await readText(await sub(DIR_GRAPH, true), GRAPH_NAME);
+      const oldText = await migrateGraph();
+      let text = null;
+      try { text = await readText(await sub(DIR_DATA, false), GRAPH_NAME); } catch (e) { if (!e || e.name !== 'NotFoundError') throw e; }
+      if (text === null) text = oldText;
       return {ok: true, data: text ? JSON.parse(text) : null};
     }
     return {ok: true, data: (await kvGet('graph')) || null};
   }
   async function writeGraph(data) {
     checkGraph(data);
-    if (S.mode === 'folder') { await writeIfChanged(await sub(DIR_GRAPH, true), GRAPH_NAME, JSON.stringify(data, null, 2)); return; }
+    if (S.mode === 'folder') {
+      await migrateGraph();   // 읽기를 거치지 않고 저장하는 경우(권한을 다시 허용한 뒤 등)에도 옛 파일을 먼저 옮깁니다
+      await writeIfChanged(await sub(DIR_DATA, true), GRAPH_NAME, JSON.stringify(data, null, 2));
+      return;
+    }
     await kvSet('graph', data);
   }
 
   // 버전 기록. 최신순 [{id, at, summary, data}]
   async function listVersions() {
     if (S.mode === 'folder') {
-      const dir = await sub(DIR_HISTORY, true);
-      const items = [];
-      for (const name of (await listFiles(dir, HISTORY_FILE)).reverse()) items.push(JSON.parse(await readText(dir, name)));
-      return items;
+      return folderHistory(items => ({value: items.map((item, index) => ({item, index})).sort((a, b) => String(b.item.at).localeCompare(String(a.item.at)) || b.index - a.index).map(x => x.item)}));
     }
     return (await tx(['versions'], 'readonly', s => s.getAll())).sort((a, b) => a.id < b.id ? 1 : -1);
   }
@@ -154,14 +270,19 @@ const Store = (function () {
     checkGraph(item.data);
     const id = newVersionId();
     const saved = {id, at: new Date().toISOString(), summary: String(item.summary || '').slice(0, 160), data: item.data};
-    if (S.mode === 'folder') await writeText(await sub(DIR_HISTORY, true), `${id}.json`, JSON.stringify(saved, null, 2));
+    if (S.mode === 'folder') await folderHistory(items => { items.push(saved); return saved; });
     else await tx(['versions'], 'readwrite', s => s.put(saved));
     return saved;
   }
-  async function deleteVersion(id) {
-    if (!HISTORY_FILE.test(`${id}.json`)) throw new Error('버전을 찾지 못했습니다.');
-    if (S.mode === 'folder') { await (await sub(DIR_HISTORY, true)).removeEntry(`${id}.json`); return; }
-    await tx(['versions'], 'readwrite', s => s.delete(id));
+  async function deleteVersion(ids) {
+    ids = Array.isArray(ids) ? ids : [ids];
+    if (!ids.length || ids.some(id => !HISTORY_FILE.test(`${id}.json`))) throw new Error('버전을 찾지 못했습니다.');
+    if (S.mode === 'folder') {
+      const deleteIds = new Set(ids);
+      await folderHistory(items => { for (let i = items.length - 1; i >= 0; i--) if (deleteIds.has(items[i]?.id)) items.splice(i, 1); return {deleteIds}; });
+      return;
+    }
+    await tx(['versions'], 'readwrite', s => { for (const id of ids) s.delete(id); });
   }
 
   /* ---------- 폴더 연결 ---------- */

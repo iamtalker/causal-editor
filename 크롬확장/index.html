@@ -134,7 +134,7 @@
     </div></div></div>
   <div class="toolbar-group" role="group" aria-label="보기"><label title="노드를 제목 한 줄짜리 작은 상자로 보여 줍니다. 제목만 보여 주어 그래프가 한눈에 들어옵니다"><input type="checkbox" id="compactView"> 간편 보기</label><button id="btnFocus" aria-pressed="false" title="선택 노드에서 화살표 방향으로 이어지는 경로를 표시합니다">흐름 모드</button><button id="btnConn" aria-pressed="false" title="선택한 노드와 연결된 노드(원인·결과 모두)만 표시합니다. 다른 노드를 선택하면 따라갑니다">연결 모드</button><select id="connDepth" aria-label="연결 단계" title="몇 단계 떨어진 노드까지 보일지 정합니다"><option value="1">1단계</option><option value="2">2단계</option><option value="3">3단계</option><option value="4">4단계</option><option value="5">5단계</option></select></div>
   <div class="toolbar-group" role="group" aria-label="화면"><button id="btnFit" title="전체 그래프가 보이도록 크기를 조정합니다">전체 그래프 보기</button><button id="btnZoom100" title="확대율을 원래 크기로 되돌립니다">실제 크기</button><button id="btnSidebar" aria-pressed="true">사이드바 숨기기</button></div>
-  <div class="toolbar-group" role="search"><label title="고른 상태가 아닌 노드와 화살표는 흐리게 표시되고, 검색창 목록에도 그 상태의 노드만 나옵니다">상태 보기 <select id="statusFilter"><option value="all">전체</option><option value="start">시작</option><option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option><option value="end">종료</option></select></label><div class="search-wrap"><input id="nodeSearch" type="search" placeholder="노드 제목·메모 검색" aria-label="노드 제목과 메모 검색" autocomplete="off"><div id="searchResults" role="listbox" aria-label="검색 결과" hidden></div></div></div>
+  <div class="toolbar-group" role="search"><label title="선택한 상태의 노드만 표시합니다. 검색 목록에도 그 상태의 노드만 나타납니다">상태 보기 <select id="statusFilter"><option value="all">전체</option><option value="start">시작</option><option value="not_started">미착수</option><option value="in_progress">진행 중</option><option value="completed">완료</option><option value="stopped">중단</option><option value="failed">실패</option><option value="end">종료</option></select></label><div class="search-wrap"><input id="nodeSearch" type="search" placeholder="노드 제목·메모 검색" aria-label="노드 제목과 메모 검색" autocomplete="off"><div id="searchResults" role="listbox" aria-label="검색 결과" hidden></div></div></div>
   <div class="toolbar-end">
   <div class="toolbar-group" role="group" aria-label="파일"><button id="btnVersions">버전 기록</button><button id="btnReload" title="노드 파일 폴더를 다시 읽습니다. 다른 기기에서 동기화된 내용을 반영합니다">파일 다시 읽기</button><button id="btnReset" title="모든 노드와 화살표를 지우고 빈 그래프로 시작합니다(설정은 유지)">모두 지우기</button></div>
   <div class="toolbar-group" role="group" aria-label="앱"><button id="btnSettings">설정</button><button id="btnHelp">도움말</button><a id="linkSupport" href="https://bookk.co.kr/bookStore/6af3769e04f230844ed9303c" target="_blank" rel="noopener noreferrer" title="제 책을 소개합니다. 도움이 되셨다면 구매로 응원해 주세요 (부크크 서점, 새 탭으로 열림)">책 소개</a></div>
@@ -146,7 +146,7 @@
   <aside>
     <label class="panel-toggle"><input type="checkbox" id="panelExpand" checked> 패널 펼치기</label>
     <div id="help" class="hint">
-      인과 그래프 하나를 편집합니다. 노드 Markdown 파일(노드파일 폴더)이 원본이며, 그래프 JSON은 내부데이터 폴더에 보조로 저장됩니다.<br><br>
+      인과 그래프 하나를 편집합니다. 노드 Markdown 파일(노드파일 폴더)이 원본이며, 그래프 JSON은 편집기데이터 폴더에 보조로 저장됩니다.<br><br>
       노드나 화살표를 클릭하면 여기에서 내용을 편집할 수 있습니다.<br>
       사용법은 상단의 <b>도움말</b> 버튼을 누르세요.
     </div>
@@ -199,7 +199,7 @@
   </ul>
   <h3 class="hh">보기·정렬</h3>
   <ul class="hint">
-    <li>상태 보기: 고른 상태의 노드는 진하게, 나머지는 흐리게 표시하고 검색 목록도 그 상태만 보여 줍니다 (파일에 저장되지 않는 화면 설정)</li>
+    <li>상태 보기: 고른 상태의 노드와 그 노드에 연결된 화살표만 표시하고, 검색 목록도 그 상태만 보여 줍니다 (파일에 저장되지 않는 화면 설정)</li>
     <li>간편 보기: 노드를 제목 한 줄짜리 작은 상자로 표시합니다</li>
     <li>연결 모드: 노드를 선택하면 그 노드와 연결된 노드(원인·결과 모두)만 표시합니다. 처음 고른 노드가 중심으로 고정되고, 옆의 단계 상자로 몇 단계 떨어진 노드까지 볼지 정합니다. 보이는 다른 노드를 눌러도 중심은 그대로이며, 중심을 바꾸려면 연결 모드를 껐다가 다시 켭니다. 흐름 모드와는 함께 쓰지 않습니다.</li>
     <li>흐름 모드: 시작 노드를 고르면 그 노드에서 화살표 방향으로 이어지는 경로만 표시합니다. 흐름 모드 중 새로 만든 노드는 계속 보이며, 종료하면 전체가 다시 보입니다</li>
@@ -220,8 +220,8 @@
 
 <dialog id="versionDlg">
   <h2 style="margin-top:0;font-size:17px">그래프 버전 기록</h2>
-  <p class="hint">버전은 현재 상태 저장을 눌렀을 때 남습니다. 아래 옵션을 켜면 정한 시간마다 자동으로도 남습니다(편집기를 열어 둔 동안, 그래프가 바뀌었을 때만). 폴더를 연결해 두면 버전이 그 폴더의 변경이력/에 파일로 남습니다.</p>
-  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="autoVersion" checked> 자동 저장</label><input type="number" id="autoHours" min="1" max="720" step="1" value="24" style="width:70px" aria-label="자동 저장 간격(시간)"> 시간마다</div>
+  <p class="hint">버전은 현재 상태 저장을 눌렀을 때 남습니다. 아래 옵션을 켜면 정한 시간마다 자동으로도 남습니다(편집기를 열어 둔 동안, 그래프가 바뀌었을 때만). 폴더를 연결하면 변경 이력이 편집기데이터/변경이력.json 한 파일에 저장됩니다.</p>
+  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="autoVersion" checked> 자동 저장</label><input type="number" id="autoHours" min="0" max="720" step="1" value="24" style="width:70px" aria-label="자동 저장 시간"><span>시간</span><input type="number" id="autoMinutes" min="0" max="59" step="1" value="0" style="width:70px" aria-label="자동 저장 분"><span>분마다</span></div>
   <label>수동 버전 요약 (비워 두면 자동으로 적힙니다)<input id="versionSummary" maxlength="160" placeholder="예: 실행 결과를 반영해 다음 단계를 수정"></label>
   <button id="btnCreateVersion">현재 상태 저장</button>
   <div id="versionList" class="hint" style="margin-top:16px;max-height:45vh;overflow:auto"></div>
